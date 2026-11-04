@@ -1,6 +1,7 @@
 const PATHS = {
   search: '<circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/>',
   chevDown: '<path d="m6 9 6 6 6-6"/>',
+  chevUp: '<path d="m6 15 6-6 6 6"/>',
   chevRight: '<path d="m9 6 6 6-6 6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   undo: '<path d="M4 10h11a5 5 0 0 1 0 10h-4"/><path d="m8 6-4 4 4 4"/>',

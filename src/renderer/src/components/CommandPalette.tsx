@@ -98,6 +98,8 @@ export function CommandPalette() {
       [t.commands.preview, 'eye', () => useApp.setState({ tab: 'preview' })],
       [t.commands.printer, 'printer', () => useApp.setState({ tab: 'printer' })],
       [t.commands.editHeads, 'paint', () => useApp.setState({ headsOpen: true })],
+      [t.commands.toggleLeft, 'prev', () => prefs.togglePanel('left')],
+      [t.commands.toggleRight, 'next', () => prefs.togglePanel('right')],
       [t.commands.viewIso, 'cube', () => state.setView('iso')],
       [t.commands.viewTop, 'cube', () => state.setView('top')],
       [t.commands.viewFront, 'cube', () => state.setView('front')],

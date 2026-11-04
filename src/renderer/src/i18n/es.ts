@@ -31,6 +31,7 @@ export const es: Dict = {
     headOf: '{name} va con el cabezal {n}. Cambiar',
     editHeads: 'Editar',
   },
+  panels: { hideLeft: 'Ocultar el panel izquierdo', showLeft: 'Mostrar el panel izquierdo', hideRight: 'Ocultar los ajustes', showRight: 'Mostrar los ajustes' },
   tools: { move: 'Mover', rotate: 'Rotar', scale: 'Escalar', layFlat: 'Apoyar', cut: 'Cortar', paint: 'Pintar', soon: 'Próximamente' },
   views: { iso: 'Iso', top: 'Arriba', front: 'Frente' },
   scene: {
@@ -91,6 +92,8 @@ export const es: Dict = {
     deleteSelected: 'Borrar el objeto seleccionado',
     exportGcode: 'Exportar el G-code',
     editHeads: 'Cambiar lo que hay en cada cabezal',
+    toggleLeft: 'Mostrar u ocultar el panel izquierdo',
+    toggleRight: 'Mostrar u ocultar el panel de ajustes',
   },
   prefs: {
     title: 'Preferencias',

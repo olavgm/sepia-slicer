@@ -29,6 +29,7 @@ export const en = {
     headOf: '{name} prints with head {n}. Change',
     editHeads: 'Edit',
   },
+  panels: { hideLeft: 'Hide the left panel', showLeft: 'Show the left panel', hideRight: 'Hide the settings', showRight: 'Show the settings' },
   tools: { move: 'Move', rotate: 'Rotate', scale: 'Scale', layFlat: 'Lay flat', cut: 'Cut', paint: 'Paint', soon: 'Coming soon' },
   views: { iso: 'Iso', top: 'Top', front: 'Front' },
   scene: {
@@ -89,6 +90,8 @@ export const en = {
     deleteSelected: 'Delete the selected object',
     exportGcode: 'Export the G-code',
     editHeads: 'Edit what is loaded in each toolhead',
+    toggleLeft: 'Show or hide the left panel',
+    toggleRight: 'Show or hide the settings panel',
   },
   prefs: {
     title: 'Preferences',

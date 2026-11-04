@@ -14,10 +14,12 @@ import { SaveAsDialog } from './components/SaveAsDialog';
 import { PreviewSummary } from './components/PreviewSummary';
 import { PreviewViewport } from './components/PreviewViewport';
 import { PrinterScreen } from './components/PrinterScreen';
+import { PanelHandle } from './components/PanelHandle';
 
 export function App() {
   const theme = useResolvedTheme();
   const lang = usePrefs((s) => s.lang);
+  const panels = usePrefs((s) => s.panels);
   const tab = useApp((s) => s.tab);
   const paletteOpen = useApp((s) => s.paletteOpen);
   const headsOpen = useApp((s) => s.headsOpen);
@@ -75,10 +77,12 @@ export function App() {
           <PrinterScreen />
         </div>
       ) : (
-        <div className="body">
+        <div className="body" data-left={panels.left ? 'open' : 'closed'} data-right={panels.right ? 'open' : 'closed'}>
           {tab === 'prepare' ? <LeftPanel /> : <PreviewSummary />}
           <main className="center" aria-label={tab === 'prepare' ? t.tabs.prepare : t.tabs.preview}>
             {tab === 'prepare' ? <PrepareViewport /> : <PreviewViewport />}
+            <PanelHandle side="left" />
+            <PanelHandle side="right" />
             {dragging && <div className="drop-overlay">{t.scene.dropHere}</div>}
           </main>
           <SettingsPanel />

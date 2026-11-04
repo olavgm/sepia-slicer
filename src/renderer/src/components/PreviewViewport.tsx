@@ -181,7 +181,7 @@ export function PreviewViewport() {
       {parsed && !slicing && (
         <>
           <div className="floating legend">
-            <div className="row between">
+            <div className="stack" style={{ gap: 6 }}>
               <label htmlFor="color-by" className="eyebrow">
                 {t.preview.colorBy}
               </label>
@@ -232,55 +232,71 @@ export function PreviewViewport() {
             ))}
           </div>
 
-          <div className="floating timeline">
-            <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-              <button className="icon-btn" aria-label={playing ? t.preview.pause : t.preview.play} onClick={() => {
+          <div className="floating layer-rail" onWheel={(e) => setLayer((l) => Math.min(layerCount - 1, Math.max(0, l + (e.deltaY < 0 ? 1 : -1))))}>
+            <span className="eyebrow">{t.preview.layer}</span>
+            <strong className="mono layer-num">{layer + 1}</strong>
+            <div className="rail-body">
+              <div className="rail-lanes" aria-hidden="true">
+                {heads.map((h, i) => {
+                  const range = parsed.stats.toolLayers[i];
+                  if (!range) return null;
+                  const span = Math.max(1, layerCount - 1);
+                  return (
+                    <div key={i} className="rail-lane" title={`${i + 1}`}>
+                      <span
+                        style={{
+                          bottom: `${(range[0] / span) * 100}%`,
+                          height: `${Math.max(((range[1] - range[0]) / span) * 100, 0.5)}%`,
+                          background: h.color,
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+                <i className="rail-marker" style={{ bottom: `${(layer / Math.max(1, layerCount - 1)) * 100}%` }} />
+              </div>
+              <input
+                className="layer-range"
+                type="range"
+                min={0}
+                max={Math.max(0, layerCount - 1)}
+                value={layer}
+                aria-label={t.preview.layerSlider}
+                aria-valuetext={`${t.preview.layer} ${layer + 1} ${t.preview.of} ${layerCount}, ${decimals(z)} mm`}
+                onChange={(e) => setLayer(Number(e.target.value))}
+              />
+            </div>
+            <span className="mono muted" style={{ fontSize: 12 }}>
+              {decimals(z)}
+            </span>
+          </div>
+
+          <div className="floating playbar">
+            <button
+              className="icon-btn"
+              aria-label={playing ? t.preview.pause : t.preview.play}
+              onClick={() => {
                 if (!playing && layer >= layerCount - 1) setLayer(0);
                 setPlaying((p) => !p);
-              }}>
-                <Icon name={playing ? 'pause' : 'play'} />
-              </button>
-              <button className="icon-btn" aria-label={t.preview.prevLayer} onClick={() => setLayer((l) => Math.max(0, l - 1))}>
-                <Icon name="prev" />
-              </button>
-              <button className="icon-btn" aria-label={t.preview.nextLayer} onClick={() => setLayer((l) => Math.min(layerCount - 1, l + 1))}>
-                <Icon name="next" />
-              </button>
-              <span>
-                {t.preview.layer} <strong className="mono">{layer + 1}</strong> {t.preview.of} <span className="mono">{layerCount}</span>
+              }}
+            >
+              <Icon name={playing ? 'pause' : 'play'} />
+            </button>
+            <button className="icon-btn" aria-label={t.preview.prevLayer} onClick={() => setLayer((l) => Math.max(0, l - 1))}>
+              <Icon name="chevDown" />
+            </button>
+            <button className="icon-btn" aria-label={t.preview.nextLayer} onClick={() => setLayer((l) => Math.min(layerCount - 1, l + 1))}>
+              <Icon name="chevUp" />
+            </button>
+            <span>
+              {t.preview.layer} <strong className="mono">{layer + 1}</strong> {t.preview.of} <span className="mono">{layerCount}</span>
+            </span>
+            <span className="mono muted">{decimals(z)} mm</span>
+            {elapsed !== null && parsed.stats.timeSeconds !== null && (
+              <span className="muted">
+                {formatDuration(elapsed, lang)} {t.preview.of} {formatDuration(parsed.stats.timeSeconds, lang)}
               </span>
-              <span className="mono muted">{decimals(z)} mm</span>
-              {elapsed !== null && parsed.stats.timeSeconds !== null && (
-                <span className="muted" style={{ marginLeft: 'auto' }}>
-                  {formatDuration(elapsed, lang)} {t.preview.of} {formatDuration(parsed.stats.timeSeconds, lang)}
-                </span>
-              )}
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={Math.max(0, layerCount - 1)}
-              value={layer}
-              aria-label={t.preview.layerSlider}
-              onChange={(e) => setLayer(Number(e.target.value))}
-            />
-            <div className="lanes" aria-hidden="true">
-              {heads.map((h, i) => {
-                const range = parsed.stats.toolLayers[i];
-                if (!range) return null;
-                const left = (range[0] / Math.max(1, layerCount - 1)) * 100;
-                const width = ((range[1] - range[0]) / Math.max(1, layerCount - 1)) * 100;
-                return (
-                  <div key={i} className="lane">
-                    <span>{i + 1}</span>
-                    <div className="lane-track">
-                      <span style={{ left: `${left}%`, width: `${Math.max(width, 0.5)}%`, background: h.color, boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.2)' }} />
-                      <i style={{ left: `${(layer / Math.max(1, layerCount - 1)) * 100}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            )}
           </div>
         </>
       )}

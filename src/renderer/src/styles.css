@@ -167,12 +167,14 @@ button:disabled {
   text-overflow: ellipsis;
 }
 .tabs {
+  flex: none;
   display: flex;
   gap: 4px;
 }
 .tab {
   min-height: 44px;
   padding: 0 12px;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -292,12 +294,16 @@ kbd {
 }
 
 .body {
+  --left-w: 260px;
+  --right-w: 400px;
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+  overflow: hidden;
 }
 .left {
-  flex: 0 0 260px;
+  flex: 0 0 var(--left-w);
+  transition: margin-left 0.18s ease, visibility 0s;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -313,7 +319,8 @@ kbd {
   background: var(--viewport);
 }
 .right {
-  flex: 0 0 400px;
+  flex: 0 0 var(--right-w);
+  transition: margin-right 0.18s ease, visibility 0s;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -321,12 +328,50 @@ kbd {
   border-left: 1px solid var(--line);
 }
 @media (max-width: 1200px) {
-  .left {
-    flex-basis: 220px;
+  .body {
+    --left-w: 220px;
+    --right-w: 340px;
   }
-  .right {
-    flex-basis: 340px;
-  }
+}
+/* A folded panel slides out of the window; hidden afterwards so Tab skips it. */
+.body[data-left='closed'] > .left {
+  margin-left: calc(-1 * var(--left-w));
+  visibility: hidden;
+  transition: margin-left 0.18s ease, visibility 0s linear 0.18s;
+}
+.body[data-right='closed'] > .right {
+  margin-right: calc(-1 * var(--right-w));
+  visibility: hidden;
+  transition: margin-right 0.18s ease, visibility 0s linear 0.18s;
+}
+.panel-handle {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 56px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+}
+.panel-handle:hover {
+  color: var(--ink);
+  background: var(--soft-fill);
+}
+.panel-handle.left {
+  left: 0;
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+}
+.panel-handle.right {
+  right: 0;
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
 }
 
 /* ---------- Left panel ---------- */
@@ -478,7 +523,7 @@ kbd {
   border-radius: 10px;
 }
 .toolbar {
-  left: 16px;
+  left: 26px;
   top: 16px;
   display: flex;
   flex-direction: column;
@@ -504,7 +549,7 @@ kbd {
   font-weight: 600;
 }
 .views {
-  right: 16px;
+  right: 26px;
   top: 16px;
   display: flex;
   gap: 2px;
@@ -1016,7 +1061,7 @@ kbd {
   background: var(--ink-2);
 }
 .legend {
-  left: 16px;
+  left: 26px;
   top: 16px;
   width: 230px;
   padding: 10px 12px;
@@ -1057,8 +1102,9 @@ kbd {
   border-radius: 2px;
   flex: none;
 }
-.legend .eyebrow {
-  white-space: nowrap;
+.legend .select {
+  width: 100%;
+  max-width: none;
 }
 .legend .grams {
   margin-left: auto;
@@ -1066,51 +1112,76 @@ kbd {
   color: var(--muted);
   font-size: 12px;
 }
-.timeline {
-  left: 16px;
-  right: 16px;
-  bottom: 16px;
-  padding: 10px 14px;
+.layer-rail {
+  right: 26px;
+  top: 66px;
+  bottom: 72px;
+  width: 64px;
+  padding: 10px 6px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-.timeline input[type='range'] {
-  width: 100%;
-  accent-color: var(--accent);
-}
-.lanes {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.lane {
-  display: grid;
-  grid-template-columns: 14px 1fr;
   align-items: center;
-  gap: 8px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--muted);
+  gap: 4px;
 }
-.lane-track {
+.layer-num {
+  font-size: 15px;
+}
+.rail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 0;
+}
+.rail-lanes {
   position: relative;
-  height: 4px;
+  display: flex;
+  gap: 3px;
+  /* Line up with the slider track, which stops half a thumb from each end. */
+  margin: 8px 0;
+}
+.rail-lane {
+  position: relative;
+  width: 4px;
   border-radius: 2px;
   background: var(--line-soft);
 }
-.lane-track span {
+.rail-lane span {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  left: 0;
+  right: 0;
   border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
-.lane-track i {
+.rail-marker {
   position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 2px;
+  left: -3px;
+  right: -3px;
+  height: 2px;
+  margin-bottom: -1px;
   background: var(--accent);
+}
+.layer-range {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 22px;
+  height: 100%;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.playbar {
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 16px 4px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
 }
 .center-message {
   position: absolute;

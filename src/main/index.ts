@@ -5,6 +5,9 @@ import { catalog, findEngine, resolve, resolveMachineForUi, resolveProcessForUi,
 import { status, upload } from './printer';
 import type { OpenedModel, SliceRequest } from '@shared/types';
 
+// Tests run with their own data folder so they never touch the user's preferences and profiles.
+if (process.env.SEPIA_USER_DATA) app.setPath('userData', process.env.SEPIA_USER_DATA);
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1440,

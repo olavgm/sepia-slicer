@@ -2,7 +2,9 @@
 // slices with OrcaSlicer and saves screenshots of each screen.
 // Usage: npm run build && node scripts/smoke.mjs <screenshot-folder>
 import { _electron as electron } from 'playwright-core';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -39,12 +41,12 @@ function prismStl(w, d, h, sides = 4) {
   return [...buf];
 }
 
-const app = await electron.launch({ executablePath: require('electron'), args: ['.'], env: { ...process.env, LANG: 'es_ES.UTF-8' } });
+const userData = mkdtempSync(join(tmpdir(), 'sepia-smoke-'));
+const app = await electron.launch({ executablePath: require('electron'), args: ['.'], env: { ...process.env, SEPIA_USER_DATA: userData } });
 const page = await app.firstWindow();
 await page.setViewportSize({ width: 1440, height: 900 });
 // Start from clean preferences, in Spanish and light mode.
 await page.evaluate(() => {
-  localStorage.clear();
   localStorage.setItem('sepia-prefs', JSON.stringify({ state: { theme: 'light', lang: 'es', printerHost: '' }, version: 0 }));
 });
 await page.reload();
@@ -84,9 +86,22 @@ await page.screenshot({ path: `${out}/5-jump.png` });
 
 // Slice.
 await page.click('.top-actions .btn-primary');
-await page.waitForSelector('.timeline', { timeout: 180000 });
+await page.waitForSelector('.layer-rail', { timeout: 180000 });
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${out}/6-preview.png` });
+// Go down to the middle of the print with the keyboard on the layer bar.
+await page.focus('.layer-range');
+for (let i = 0; i < 45; i++) await page.keyboard.press('ArrowDown');
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${out}/6b-preview-layer.png` });
+// Fold both side panels, then unfold them.
+await page.click('.panel-handle.left');
+await page.click('.panel-handle.right');
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${out}/6c-panels-folded.png` });
+await page.click('.panel-handle.left');
+await page.click('.panel-handle.right');
+await page.waitForTimeout(400);
 const summary = await page.textContent('.left');
 console.log('SUMMARY', summary?.replace(/\s+/g, ' ').slice(0, 300));
 

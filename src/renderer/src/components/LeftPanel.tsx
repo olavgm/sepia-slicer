@@ -3,7 +3,7 @@ import { useApp } from '../state/app';
 import { fmt, useT } from '../i18n';
 import { Icon } from './Icon';
 import { Popover } from './Popover';
-import { openModelsDialog } from '../actions';
+import { arrangeObjects, openModelsDialog } from '../actions';
 
 export function Swatch({ color, size = 10 }: { color: string; size?: number }) {
   return <span className="swatch" aria-hidden="true" style={{ width: size, height: size, background: color }} />;
@@ -79,9 +79,21 @@ export function LeftPanel() {
             ))}
           </ul>
         )}
-        <button className="btn btn-dashed" onClick={() => openModelsDialog()}>
-          {t.actions.addModel}
-        </button>
+        <div className="row">
+          <button className="btn btn-dashed" style={{ flex: 1, minWidth: 0 }} onClick={() => openModelsDialog()}>
+            {t.actions.addModel}
+          </button>
+          <button
+            className="btn"
+            style={{ flex: 'none', width: 40, padding: 0 }}
+            aria-label={t.edit.arrangeHelp}
+            title={t.edit.arrangeHelp}
+            disabled={objects.length === 0}
+            onClick={() => arrangeObjects()}
+          >
+            <Icon name="arrange" />
+          </button>
+        </div>
       </section>
 
       <section className="stack" style={{ marginTop: 'auto' }}>

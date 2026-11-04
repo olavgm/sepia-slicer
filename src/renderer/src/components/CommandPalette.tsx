@@ -4,7 +4,8 @@ import { useApp, plateValue } from '../state/app';
 import { usePrefs } from '../state/prefs';
 import { fmt, useT } from '../i18n';
 import { describeValue } from '../settings/format';
-import { exportGcode, openModelsDialog, sliceNow } from '../actions';
+import { arrangeObjects, exportGcode, openModelsDialog, sliceNow } from '../actions';
+import { newProject, openProject, saveProject } from '../project';
 import { Icon, type IconName } from './Icon';
 
 interface Item {
@@ -94,6 +95,13 @@ export function CommandPalette() {
     const actions: [string, IconName, () => void][] = [
       [t.commands.addModel, 'plus', () => openModelsDialog()],
       [t.commands.slice, 'layers', () => sliceNow()],
+      [t.commands.arrange, 'arrange', () => arrangeObjects()],
+      [t.commands.saveProject, 'download', () => saveProject()],
+      [t.commands.openProject, 'upload', () => openProject()],
+      [t.commands.newProject, 'plus', () => newProject()],
+      [t.commands.saveProjectAs, 'download', () => saveProject(true)],
+      [t.commands.undo, 'undo', () => state.undo()],
+      [t.commands.redo, 'redo', () => state.redo()],
       [t.commands.prepare, 'cube', () => useApp.setState({ tab: 'prepare' })],
       [t.commands.preview, 'eye', () => useApp.setState({ tab: 'preview' })],
       [t.commands.printer, 'printer', () => useApp.setState({ tab: 'printer' })],

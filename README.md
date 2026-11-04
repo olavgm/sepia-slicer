@@ -12,6 +12,9 @@ A friendlier slicer for the **Snapmaker U1**, the four-toolhead printer. Sepia i
 - **Per-piece settings where you expect them.** Select an object and the same list shows its own settings: what you changed only for it, with the rest greyed out as inherited from the plate.
 - **Search everything with ⌘K.** Settings, objects and actions, in English or Spanish. Pick a setting and the list scrolls to it.
 - **Made for four toolheads.** Each object gets a toolhead in the object list. The preview colours by toolhead, shows which layers each head prints and counts the toolhead changes, which is where a toolchanger spends its time.
+- **Projects.** Save and open `.sepia` files (models, positions, toolheads and every setting), with undo and redo, and a warning before closing with unsaved changes.
+- **Arrange.** Press A to lay the objects out without touching, clear of the prime tower. New models land in free space.
+- **The printer at a glance.** The Printer tab shows the U1's state, progress, the temperature of each toolhead and the bed, and its camera, through Moonraker.
 
 ## Requirements
 
@@ -32,8 +35,8 @@ Other scripts:
 | --- | --- |
 | `npm run build` | Builds the app into `out/` |
 | `npm start` | Runs the built app |
-| `npm test` | Unit tests (G-code reader) |
-| `npm run smoke` | Builds, opens the app, loads two models on two toolheads, slices with Orca and saves screenshots to `smoke-shots/` |
+| `npm test` | Unit tests (G-code reader, arrange) |
+| `npm run smoke` | Builds the app and drives it end to end: two models on two toolheads, a per-piece setting, arrange, undo/redo, slicing with Orca, saving and reopening a project, and a fake printer. Screenshots go to `smoke-shots/` |
 | `npm run typecheck` | TypeScript checks |
 | `npm run dist` | Packages a macOS app with electron-builder |
 
@@ -43,11 +46,11 @@ Other scripts:
 - **Profiles.** Sepia reads Orca's Snapmaker U1 profiles from the installed app, merges their inheritance chain and asks Orca for its full config once per profile, so every value it shows is the one Orca will use.
 - **Slicing.** Each object is written as an STL in bed coordinates, all four toolheads are loaded as filaments, and Orca's command line slices the plate. When an object has settings of its own, Sepia exports a 3MF project, writes those settings into it and slices the project, since the command line has no option for per-object settings.
 - **Preview.** A Web Worker reads Orca's G-code (layers, toolheads, line types, arcs, time and filament per toolhead) and three.js draws it layer by layer.
-- **Printer.** Sending uses Moonraker's upload API on the U1. It has not been tested against a real printer yet.
+- **Printer.** Status, camera snapshots and sending use Moonraker's API on the U1. The smoke test checks them against a fake Moonraker; they have not been tried on a real U1 yet.
 
 ## Not done yet
 
-- More than one plate; cut and paint tools; arranging objects automatically
+- More than one plate; cut and paint tools
 - Filament settings (temperatures, fans) in the settings list. Today a toolhead's filament profile is picked as a whole.
 - Different toolheads for different parts of one object
 - Windows and Linux paths for OrcaSlicer

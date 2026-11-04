@@ -158,6 +158,10 @@ button:disabled {
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
+.brand .edited {
+  font-style: normal;
+  font-family: var(--font);
+}
 .brand span {
   color: var(--muted);
   font-family: var(--mono);
@@ -542,6 +546,11 @@ kbd {
   border-radius: 8px;
   background: transparent;
   font-size: 11px;
+}
+.toolbar-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line-soft);
 }
 .tool[aria-pressed='true'] {
   background: var(--tint);
@@ -1215,9 +1224,15 @@ kbd {
   overflow-y: auto;
   padding: 32px;
 }
-.printer-card {
-  max-width: 560px;
+.printer-grid {
+  max-width: 1100px;
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.printer-card {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -1229,4 +1244,41 @@ kbd {
 .printer-card h1 {
   margin: 0;
   font-size: 22px;
+}
+.temps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.temps li {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.temps li[data-active='true'] {
+  font-weight: 600;
+}
+.camera {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  background: var(--viewport);
+}
+.camera-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 16px;
 }

@@ -25,6 +25,9 @@ export function PrepareViewport() {
   const view = useApp((s) => s.view);
   const objects = useApp((s) => s.objects);
   const sliceOutdated = useApp((s) => s.sliceOutdated);
+  const canUndo = useApp((s) => s.past.length > 0);
+  const canRedo = useApp((s) => s.future.length > 0);
+  const notice = useApp((s) => s.notice);
   const gcode = useApp((s) => s.gcode);
 
   // Create the stage once.
@@ -108,6 +111,7 @@ export function PrepareViewport() {
       offset: THREE.Vector3;
       quat: [number, number, number, number];
       scale: number;
+      recorded: boolean;
     } = null;
     let downAt: { x: number; y: number } | null = null;
 
@@ -142,6 +146,7 @@ export function PrepareViewport() {
         offset: new THREE.Vector3(o.x - ground.x, o.y - ground.y, 0),
         quat: o.quat,
         scale: o.scale,
+        recorded: false,
       };
       stage.controls.enabled = false;
       canvas.setPointerCapture(e.pointerId);
@@ -150,19 +155,24 @@ export function PrepareViewport() {
     const onMove = (e: PointerEvent) => {
       if (!drag) return;
       const s = useApp.getState();
+      // One undo step per drag, saved when the object first moves.
+      if (!drag.recorded) {
+        s.record();
+        drag.recorded = true;
+      }
       if (drag.mode === 'move') {
         const p = stage.pointOnPlane(e, 0);
         if (!p) return;
         const x = Math.min(BED, Math.max(0, p.x + drag.offset.x));
         const y = Math.min(BED, Math.max(0, p.y + drag.offset.y));
-        s.updateObject(drag.id, { x, y });
+        s.updateObject(drag.id, { x, y }, { record: false });
       } else if (drag.mode === 'rotate') {
         const angle = (e.clientX - drag.startX) * 0.01;
         const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle).multiply(new THREE.Quaternion(...drag.quat));
-        s.updateObject(drag.id, { quat: [q.x, q.y, q.z, q.w] });
+        s.updateObject(drag.id, { quat: [q.x, q.y, q.z, q.w] }, { record: false });
       } else if (drag.mode === 'scale') {
         const scale = Math.min(20, Math.max(0.05, drag.scale * Math.exp(-(e.clientY - drag.startY) * 0.005)));
-        s.updateObject(drag.id, { scale });
+        s.updateObject(drag.id, { scale }, { record: false });
       }
     };
 
@@ -220,6 +230,15 @@ export function PrepareViewport() {
             </button>
           );
         })}
+        <span className="toolbar-divider" aria-hidden="true" />
+        <button className="tool" disabled={!canUndo} onClick={() => useApp.getState().undo()} title="⌘Z">
+          <Icon name="undo" size={20} stroke={1.6} />
+          {t.edit.undo}
+        </button>
+        <button className="tool" disabled={!canRedo} onClick={() => useApp.getState().redo()} title="⇧⌘Z">
+          <Icon name="redo" size={20} stroke={1.6} />
+          {t.edit.redo}
+        </button>
       </div>
       <div className="floating views seg" role="group" aria-label="View">
         {(['iso', 'top', 'front'] as View[]).map((v) => (
@@ -228,11 +247,17 @@ export function PrepareViewport() {
           </button>
         ))}
       </div>
-      <p className="floating status-pill">
+      <p className="floating status-pill" role="status">
+        {notice ? (
+          <span>{notice}</span>
+        ) : (
+          <>
         {gcode && !sliceOutdated ? '' : `${t.scene.notSliced} · `}
         <span className="muted">
           {sliceOutdated ? t.scene.sliceOutdated : fmt(t.scene.summary, { objects: objects.length, heads: usedHeads })}
         </span>
+          </>
+        )}
       </p>
     </>
   );

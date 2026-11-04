@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { useApp } from './state/app';
 import { usePrefs } from './state/prefs';
 import { useResolvedTheme } from './theme';
-import { addModels, filesToModels, loadProfiles } from './actions';
+import { addModels, arrangeObjects, exportGcode, filesToModels, loadProfiles, openModelsDialog, sliceNow } from './actions';
+import { newProject, openProject, projectName, saveProject } from './project';
+import { fmt } from './i18n';
+import type { MenuCommand } from '@shared/types';
 import { useT } from './i18n';
 import { TopBar } from './components/TopBar';
 import { LeftPanel } from './components/LeftPanel';
@@ -35,11 +38,37 @@ export function App() {
     loadProfiles().catch(() => useApp.setState({ engine: { found: false } }));
   }, []);
 
+  // Window title, the "edited" dot on macOS and the question asked before closing with unsaved changes.
+  const dirty = useApp((s) => s.dirty);
+  const projectPath = useApp((s) => s.projectPath);
+  useEffect(() => {
+    const name = projectName(projectPath);
+    window.sepia.setDocument({
+      title: `${name} — Sepia`,
+      dirty,
+      path: projectPath,
+      lang,
+      closePrompt: {
+        message: t.project.closeMessage,
+        detail: fmt(t.project.closeDetail, { name }),
+        close: t.project.closeAnyway,
+        cancel: t.actions.cancel,
+      },
+    });
+  }, [dirty, projectPath, lang, t]);
+
+  useEffect(() => window.sepia.onMenu(runMenuCommand), []);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         useApp.setState((s) => ({ paletteOpen: !s.paletteOpen }));
+        return;
+      }
+      const s = useApp.getState();
+      if (e.key.toLowerCase() === 'a' && !e.metaKey && !e.ctrlKey && !e.altKey && !isEditing() && s.tab === 'prepare' && !s.paletteOpen) {
+        arrangeObjects();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -94,3 +123,60 @@ export function App() {
     </div>
   );
 }
+
+/** True while the user is typing in a field, where shortcuts like ⌘Z belong to the field. */
+function isEditing(): boolean {
+  const el = document.activeElement;
+  return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+}
+
+function runMenuCommand(command: MenuCommand): void {
+  const s = useApp.getState();
+  switch (command) {
+    case 'new':
+      newProject();
+      break;
+    case 'open':
+      openProject();
+      break;
+    case 'save':
+      saveProject();
+      break;
+    case 'saveAs':
+      saveProject(true);
+      break;
+    case 'addModel':
+      openModelsDialog();
+      break;
+    case 'exportGcode':
+      exportGcode();
+      break;
+    case 'undo':
+      if (isEditing()) document.execCommand('undo');
+      else s.undo();
+      break;
+    case 'redo':
+      if (isEditing()) document.execCommand('redo');
+      else s.redo();
+      break;
+    case 'arrange':
+      arrangeObjects();
+      break;
+    case 'delete':
+      if (!isEditing() && s.selectedId) s.removeObject(s.selectedId);
+      break;
+    case 'palette':
+      useApp.setState({ paletteOpen: !s.paletteOpen });
+      break;
+    case 'toggleLeft':
+      usePrefs.getState().togglePanel('left');
+      break;
+    case 'toggleRight':
+      usePrefs.getState().togglePanel('right');
+      break;
+    case 'slice':
+      sliceNow();
+      break;
+  }
+}
+

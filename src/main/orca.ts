@@ -234,7 +234,7 @@ export async function slice(request: SliceRequest): Promise<SliceResult> {
       if (exported.code !== 0 || !existsSync(project)) {
         return { ok: false, error: `orca-exit-${exported.code}`, log: tail(exported.output), durationMs: Date.now() - started };
       }
-      addObjectSettings(project, request.objects.map((o) => o.overrides));
+      addObjectSettings(project, Object.fromEntries(request.objects.map((o, i) => [`object${i + 1}.stl`, o.overrides])));
       result = await run(info.executable, ['--slice', '0', ...common, project]);
     } else {
       result = await run(info.executable, ['--slice', '0', '--arrange', '0', ...common, ...ids, ...modelFiles]);
@@ -250,19 +250,24 @@ export async function slice(request: SliceRequest): Promise<SliceResult> {
   }
 }
 
-/** Writes per-object settings into a 3MF project's model_settings.config, objects in load order. */
-export function addObjectSettings(projectPath: string, overrides: Record<string, string>[]): void {
+/**
+ * Writes per-object settings into a 3MF project's model_settings.config. Objects are matched by the
+ * name Orca gives them (the model file name), because Orca does not keep them in load order.
+ */
+export function addObjectSettings(projectPath: string, overridesByName: Record<string, Record<string, string>>): void {
   const files = unzipSync(readFileSync(projectPath));
-  const name = 'Metadata/model_settings.config';
-  let index = 0;
-  const xml = strFromU8(files[name]).replace(/(<object id="[^"]*">\s*\n)/g, (match) => {
-    const own = overrides[index++] ?? {};
-    const lines = Object.entries(own)
-      .map(([key, value]) => `    <metadata key="${escapeXml(key)}" value="${escapeXml(value)}"/>\n`)
-      .join('');
-    return match + lines;
-  });
-  files[name] = strToU8(xml);
+  const config = 'Metadata/model_settings.config';
+  const xml = strFromU8(files[config]).replace(
+    /(<object id="[^"]*">\s*\n\s*<metadata key="name" value="([^"]*)"\/>\s*\n)/g,
+    (match, _all, name: string) => {
+      const own = overridesByName[name] ?? {};
+      const lines = Object.entries(own)
+        .map(([key, value]) => `    <metadata key="${escapeXml(key)}" value="${escapeXml(value)}"/>\n`)
+        .join('');
+      return match + lines;
+    },
+  );
+  files[config] = strToU8(xml);
   writeFileSync(projectPath, zipSync(files));
 }
 

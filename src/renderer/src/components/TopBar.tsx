@@ -5,13 +5,15 @@ import { fmt, useT } from '../i18n';
 import { Icon } from './Icon';
 import { Popover } from './Popover';
 import { exportGcode, sendToPrinter, sliceNow } from '../actions';
+import { projectName } from '../project';
 
 export function TopBar() {
   const { t } = useT();
   const tab = useApp((s) => s.tab);
   const slicing = useApp((s) => s.slicing);
   const gcode = useApp((s) => s.gcode);
-  const objects = useApp((s) => s.objects);
+  const dirty = useApp((s) => s.dirty);
+  const projectPath = useApp((s) => s.projectPath);
   const host = usePrefs((s) => s.printerHost);
   const [prefsOpen, setPrefsOpen] = useState(false);
   const [sendOpen, setSendOpen] = useState(false);
@@ -33,13 +35,16 @@ export function TopBar() {
   }, [host]);
 
   const tabs: Tab[] = ['prepare', 'preview', 'printer'];
-  const fileName = objects.length ? objects.map((o) => o.name).join(', ') : t.untitled;
+  const fileName = projectName(projectPath);
 
   return (
     <header className="topbar">
       <div className="brand">
         <strong>Sepia</strong>
-        <span title={fileName}>{fileName}</span>
+        <span title={projectPath ?? fileName}>
+          {fileName}
+          {dirty && <em className="edited"> · {t.project.edited}</em>}
+        </span>
       </div>
       <nav className="tabs" aria-label="Sections">
         {tabs.map((id) => (

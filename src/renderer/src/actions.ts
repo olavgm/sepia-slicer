@@ -1,7 +1,12 @@
 // Things the UI does that involve more than one piece of state: loading models, slicing, sending.
-import { useApp, effectiveOverrides, newId, type SceneObject } from './state/app';
+import { useApp, effectiveOverrides, newId, plateValue, type SceneObject } from './state/app';
 import { geometries, geometryFromFile, objectMatrix, toStl } from './scene/models';
 import { BED } from './scene/stage';
+import { arrange, objectRect, type Rect } from './scene/arrange';
+import { isOn } from './settings/format';
+import { fmt } from './i18n';
+import { en } from './i18n/en';
+import { es } from './i18n/es';
 import type { OpenedModel } from '@shared/types';
 import { usePrefs } from './state/prefs';
 
@@ -59,6 +64,10 @@ export function addModels(models: OpenedModel[]): string[] {
         scale: 1,
         overrides: {},
       };
+      // Put it in free space, away from the other objects and the prime tower.
+      const others = useApp.getState().objects;
+      const free = arrange([object], [...others.map(objectRect), ...primeTowerArea([...others, object])]).positions.get(id);
+      if (free) Object.assign(object, free);
       useApp.getState().addObject(object);
     } catch {
       failed.push(model.name);
@@ -136,3 +145,45 @@ export async function sendToPrinter(start: boolean) {
   if (!gcode || !host) return { ok: false, error: 'missing' };
   return window.sepia.printerUpload(host, gcode, gcodeFileName(), start);
 }
+
+const firstNumber = (v: unknown, fallback: number) => {
+  const n = Number(Array.isArray(v) ? v[0] : v);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/** Where Orca will put the prime tower, if the plate uses more than one toolhead. */
+function primeTowerArea(objects: SceneObject[]): Rect[] {
+  const s = useApp.getState();
+  if (new Set(objects.map((o) => o.head)).size < 2) return [];
+  if (!isOn(plateValue(s, 'enable_prime_tower') || '1')) return [];
+  const x = firstNumber(s.processBase.wipe_tower_x, 15);
+  const y = firstNumber(s.processBase.wipe_tower_y, 220);
+  const w = firstNumber(plateValue(s, 'prime_tower_width'), 35);
+  const brim = firstNumber(plateValue(s, 'prime_tower_brim_width'), 5);
+  return [{ x: x - brim, y: y - brim, w: w + brim * 2, h: w + brim * 2 }];
+}
+
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+export function showNotice(text: string): void {
+  clearTimeout(noticeTimer);
+  useApp.setState({ notice: text });
+  noticeTimer = setTimeout(() => useApp.setState({ notice: null }), 4000);
+}
+
+/** Lays every object out on the plate without overlaps. One undo step. */
+export function arrangeObjects(): void {
+  const s = useApp.getState();
+  if (s.objects.length === 0) return;
+  const { positions, didNotFit } = arrange(s.objects, primeTowerArea(s.objects));
+  s.record();
+  useApp.setState({
+    objects: s.objects.map((o) => (positions.has(o.id) ? { ...o, ...positions.get(o.id)! } : o)),
+    dirty: true,
+    sliceOutdated: s.gcode !== null,
+  });
+  if (didNotFit.length) {
+    const t = usePrefs.getState().lang === 'es' ? es : en;
+    showNotice(fmt(t.edit.didNotFit, { count: didNotFit.length }));
+  }
+}
+

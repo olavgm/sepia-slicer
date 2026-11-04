@@ -22,6 +22,15 @@ export interface SceneObject {
   overrides: Record<string, string>;
 }
 
+/** What undo and redo bring back: the objects on the plate and the plate's setting changes. */
+export interface Snapshot {
+  objects: SceneObject[];
+  overrides: Record<string, string>;
+}
+
+const HISTORY_LIMIT = 100;
+let lastRecord = { key: '', at: 0 };
+
 export interface UserProfile {
   name: string;
   process: string;
@@ -92,12 +101,27 @@ interface AppState {
   parsed: ParsedGcode | null;
   sliceOutdated: boolean;
 
+  past: Snapshot[];
+  future: Snapshot[];
+  /** Unsaved changes in the project. */
+  dirty: boolean;
+  projectPath: string | null;
+  /** Short message shown for a few seconds at the bottom of the 3D view. */
+  notice: string | null;
+
   set(partial: Partial<AppState>): void;
+  /**
+   * Saves the current plate so it can be undone. Changes to the same thing within a moment
+   * (typing in one field, nudging one object) count as one step.
+   */
+  record(key?: string): void;
+  undo(): void;
+  redo(): void;
   setTab(tab: Tab): void;
   setView(view: View): void;
   setSetting(key: string, value: string | null, objectId?: string | null): void;
   addObject(o: SceneObject): void;
-  updateObject(id: string, patch: Partial<SceneObject>): void;
+  updateObject(id: string, patch: Partial<SceneObject>, options?: { record?: boolean }): void;
   removeObject(id: string): void;
   setHead(index: number, head: HeadConfig): void;
   saveUserProfile(name?: string): void;
@@ -138,11 +162,57 @@ export const useApp = create<AppState>()((set, get) => ({
   parsed: null,
   sliceOutdated: false,
 
+  past: [],
+  future: [],
+  dirty: false,
+  projectPath: null,
+  notice: null,
+
   set: (partial) => set(partial),
+  record: (key) => {
+    const now = Date.now();
+    const s = get();
+    if (key && key === lastRecord.key && now - lastRecord.at < 1200) {
+      lastRecord.at = now;
+      set({ dirty: true });
+      return;
+    }
+    lastRecord = { key: key ?? '', at: now };
+    set({ past: [...s.past, { objects: s.objects, overrides: s.overrides }].slice(-HISTORY_LIMIT), future: [], dirty: true });
+  },
+  undo: () => {
+    const s = get();
+    const previous = s.past[s.past.length - 1];
+    if (!previous) return;
+    lastRecord = { key: '', at: 0 };
+    set({
+      past: s.past.slice(0, -1),
+      future: [{ objects: s.objects, overrides: s.overrides }, ...s.future],
+      ...previous,
+      selectedId: previous.objects.some((o) => o.id === s.selectedId) ? s.selectedId : null,
+      dirty: true,
+      sliceOutdated: s.gcode !== null,
+    });
+  },
+  redo: () => {
+    const s = get();
+    const next = s.future[0];
+    if (!next) return;
+    lastRecord = { key: '', at: 0 };
+    set({
+      future: s.future.slice(1),
+      past: [...s.past, { objects: s.objects, overrides: s.overrides }],
+      ...next,
+      selectedId: next.objects.some((o) => o.id === s.selectedId) ? s.selectedId : null,
+      dirty: true,
+      sliceOutdated: s.gcode !== null,
+    });
+  },
   setTab: (tab) => set({ tab }),
   setView: (view) => set((s) => ({ view, viewNonce: s.viewNonce + 1 })),
 
   setSetting: (key, value, objectId) => {
+    get().record(`setting:${objectId ?? 'plate'}:${key}`);
     const s = get();
     if (objectId) {
       set({
@@ -163,19 +233,26 @@ export const useApp = create<AppState>()((set, get) => ({
     set({ overrides, sliceOutdated: s.gcode !== null });
   },
 
-  addObject: (o) => set((s) => ({ objects: [...s.objects, o], selectedId: o.id, sliceOutdated: s.gcode !== null })),
-  updateObject: (id, patch) =>
-    set((s) => ({ objects: s.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)), sliceOutdated: s.gcode !== null })),
-  removeObject: (id) =>
+  addObject: (o) => {
+    get().record();
+    set((s) => ({ objects: [...s.objects, o], selectedId: o.id, sliceOutdated: s.gcode !== null }));
+  },
+  updateObject: (id, patch, options) => {
+    if (options?.record !== false) get().record(`object:${id}:${Object.keys(patch).join(',')}`);
+    set((s) => ({ objects: s.objects.map((o) => (o.id === id ? { ...o, ...patch } : o)), sliceOutdated: s.gcode !== null, dirty: true }));
+  },
+  removeObject: (id) => {
+    get().record();
     set((s) => ({
       objects: s.objects.filter((o) => o.id !== id),
       selectedId: s.selectedId === id ? null : s.selectedId,
       sliceOutdated: s.gcode !== null,
-    })),
+    }));
+  },
   setHead: (index, head) => {
     const heads = get().heads.map((h, i) => (i === index ? head : h));
     localStorage.setItem('sepia-heads', JSON.stringify(heads));
-    set({ heads, sliceOutdated: get().gcode !== null });
+    set({ heads, sliceOutdated: get().gcode !== null, dirty: true });
   },
 
   saveUserProfile: (name) => {
@@ -188,7 +265,10 @@ export const useApp = create<AppState>()((set, get) => ({
     localStorage.setItem('sepia-user-profiles', JSON.stringify(userProfiles));
     set({ userProfiles, userProfile: profileName, profileOverrides: merged, overrides: {} });
   },
-  discardChanges: () => set({ overrides: {} }),
+  discardChanges: () => {
+    get().record();
+    set({ overrides: {} });
+  },
   focusSetting: (key) => {
     const def = settingDef(key);
     const s = get();

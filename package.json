@@ -1,0 +1,51 @@
+{
+  "name": "sepia-slicer",
+  "productName": "Sepia Slicer",
+  "version": "0.1.0",
+  "description": "A friendlier slicer for the Snapmaker U1, built on OrcaSlicer's engine.",
+  "license": "AGPL-3.0-only",
+  "author": "Olav Gausaker",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "node --test 'src/**/*.test.ts'",
+    "dist": "electron-vite build && electron-builder --mac",
+    "smoke": "electron-vite build && node scripts/smoke.mjs smoke-shots"
+  },
+  "build": {
+    "appId": "com.olavgm.sepiaslicer",
+    "productName": "Sepia Slicer",
+    "files": [
+      "out/**"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity"
+    }
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@fontsource/ibm-plex-sans": "^5.3.0",
+    "fflate": "^0.8.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.187.0",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "electron": "^45.2.2",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "playwright-core": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}

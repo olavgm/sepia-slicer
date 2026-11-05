@@ -34,6 +34,7 @@
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
   --font: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%235b6470' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: light;
 }
 
@@ -63,6 +64,7 @@
   --switch-off: #5f6873;
   --scrim: rgba(0, 0, 0, 0.5);
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23a9b1bc' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -89,6 +91,14 @@ input,
 select {
   font: inherit;
   color: inherit;
+}
+/* Our own chevron: the native one sits against the right edge and ignores padding. */
+select {
+  appearance: none;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
 }
 button {
   cursor: pointer;
@@ -140,7 +150,6 @@ button:disabled {
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   -webkit-app-region: drag;
-  padding-left: 84px; /* room for the macOS window buttons */
 }
 .topbar button,
 .topbar input,
@@ -626,10 +635,10 @@ kbd {
   flex: 1;
   min-width: 0;
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 34px 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background-color: var(--panel);
 }
 .settings-scroll {
   flex: 1 1 0;
@@ -772,14 +781,14 @@ kbd {
   flex: none;
   max-width: 200px;
   min-height: 34px;
-  padding: 0 8px;
+  padding: 0 34px 0 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--panel);
+  background-color: var(--panel);
 }
 .setting[data-changed='true'] .select {
   border-color: var(--accent);
-  background: var(--tint);
+  background-color: var(--tint);
   font-weight: 600;
 }
 .switch {
@@ -1010,7 +1019,10 @@ kbd {
   padding: 0 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel);
+  background-color: var(--panel);
+}
+.field select {
+  padding-right: 34px;
 }
 .heads-grid {
   display: grid;

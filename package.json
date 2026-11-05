@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "node --test 'src/**/*.test.ts'",
     "dist": "electron-vite build && electron-builder --mac",
-    "smoke": "electron-vite build && node scripts/smoke.mjs smoke-shots"
+    "smoke": "electron-vite build && node scripts/smoke.mjs smoke-shots",
+    "icon": "node scripts/icon/build.mjs"
   },
   "build": {
     "appId": "com.olavgm.sepiaslicer",
@@ -23,7 +24,8 @@
       "out/**"
     ],
     "mac": {
-      "category": "public.app-category.productivity"
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icon"
     },
     "fileAssociations": [
       {

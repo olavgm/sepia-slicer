@@ -216,6 +216,8 @@ app.on('open-file', (event, path) => {
 for (const arg of process.argv.slice(1)) if (MODEL_EXTENSIONS.includes(extname(arg).slice(1).toLowerCase())) pendingFiles.push(arg);
 
 app.whenReady().then(() => {
+  // The packaged app takes its icon from build/icon.icon; in development the Dock would show Electron's.
+  if (!app.isPackaged) app.dock?.setIcon(join(app.getAppPath(), 'build/icon.png'));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

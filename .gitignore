@@ -6,3 +6,4 @@ dist/
 .env*
 !.env.template
 smoke-shots/
+.claude/worktrees/

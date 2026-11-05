@@ -1,39 +1,51 @@
-// Loading models into geometry, and writing them back as STL for the slicing engine.
+// Loading models into geometry, and placing objects (made of parts) on the bed.
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { ThreeMFLoader } from 'three/examples/jsm/loaders/3MFLoader.js';
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import type { SceneObject } from '../state/app';
+import type { Part, SceneObject } from '../state/app';
 
-/** Geometry for each object, kept out of the store because it is large and not serialisable. */
+/**
+ * Geometry of each part, by part id. Kept out of the store because it is large and not serialisable.
+ * Geometry never changes once loaded, so copies of a part can share it.
+ */
 export const geometries = new Map<string, THREE.BufferGeometry>();
 
+/** Triangle soup with only positions, as every part's geometry is kept. */
+export function cleanGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  let g = geometry.index ? geometry.toNonIndexed() : geometry;
+  for (const name of Object.keys(g.attributes)) if (name !== 'position') g.deleteAttribute(name);
+  g.computeVertexNormals();
+  g.computeBoundingBox();
+  g.computeBoundingSphere();
+  return g;
+}
+
+function mergeGroup(group: THREE.Object3D): THREE.BufferGeometry {
+  group.updateMatrixWorld(true);
+  const parts: THREE.BufferGeometry[] = [];
+  group.traverse((node) => {
+    const mesh = node as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    let g = mesh.geometry.clone();
+    g.applyMatrix4(mesh.matrixWorld);
+    if (g.index) g = g.toNonIndexed();
+    for (const name of Object.keys(g.attributes)) if (name !== 'position') g.deleteAttribute(name);
+    parts.push(g);
+  });
+  if (parts.length === 0) throw new Error('empty model');
+  return parts.length === 1 ? parts[0] : mergeGeometries(parts)!;
+}
+
+/** One geometry from an STL, OBJ or (plain) 3MF file, centred on X/Y and resting on Z = 0. */
 export function geometryFromFile(ext: string, data: ArrayBuffer): THREE.BufferGeometry {
   let geometry: THREE.BufferGeometry;
-  if (ext === 'stl') {
-    geometry = new STLLoader().parse(data);
-  } else if (ext === '3mf') {
-    const group = new ThreeMFLoader().parse(data);
-    group.updateMatrixWorld(true);
-    const parts: THREE.BufferGeometry[] = [];
-    group.traverse((node) => {
-      const mesh = node as THREE.Mesh;
-      if (!mesh.isMesh) return;
-      let g = mesh.geometry.clone();
-      g.applyMatrix4(mesh.matrixWorld);
-      if (g.index) g = g.toNonIndexed();
-      for (const name of Object.keys(g.attributes)) if (name !== 'position') g.deleteAttribute(name);
-      parts.push(g);
-    });
-    if (parts.length === 0) throw new Error('empty 3MF');
-    geometry = parts.length === 1 ? parts[0] : mergeGeometries(parts)!;
-  } else {
-    throw new Error(`unsupported: ${ext}`);
-  }
-  if (geometry.index) geometry = geometry.toNonIndexed();
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  // Centre on X/Y and sit on Z = 0.
+  if (ext === 'stl') geometry = new STLLoader().parse(data);
+  else if (ext === '3mf') geometry = mergeGroup(new ThreeMFLoader().parse(data));
+  else if (ext === 'obj') geometry = mergeGroup(new OBJLoader().parse(new TextDecoder().decode(data)));
+  else throw new Error(`unsupported: ${ext}`);
+  geometry = cleanGeometry(geometry);
   const box = geometry.boundingBox!;
   geometry.translate(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, -box.min.z);
   geometry.computeBoundingBox();
@@ -41,47 +53,60 @@ export function geometryFromFile(ext: string, data: ArrayBuffer): THREE.BufferGe
   return geometry;
 }
 
-/** Object transform, with Z chosen so the object rests on the bed. */
-export function objectMatrix(o: SceneObject, geometry: THREE.BufferGeometry): THREE.Matrix4 {
-  const q = new THREE.Quaternion(...o.quat);
-  const s = new THREE.Vector3(o.scale, o.scale, o.scale);
-  const m = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, 0), q, s);
-  const box = new THREE.Box3().setFromBufferAttribute(geometry.getAttribute('position') as THREE.BufferAttribute).applyMatrix4(m);
-  m.setPosition(o.x, o.y, -box.min.z);
+const partMatrix = (p: Part) => new THREE.Matrix4().fromArray(p.matrix);
+
+/** Bounding box of an object's parts in its own space (before position, rotation and scale). */
+export function localBox(o: SceneObject): THREE.Box3 {
+  const box = new THREE.Box3();
+  for (const p of o.parts) {
+    const g = geometries.get(p.id);
+    if (!g) continue;
+    if (!g.boundingBox) g.computeBoundingBox();
+    box.union(g.boundingBox!.clone().applyMatrix4(partMatrix(p)));
+  }
+  return box;
+}
+
+/** Shape bounds depend only on rotation, scale and parts, not on position: cache them per object. */
+const shapeCache = new Map<string, { key: string; box: THREE.Box3 }>();
+
+/** Exact bounds of the rotated, scaled parts, as if the object stood at the origin. */
+function shapeBox(o: SceneObject): THREE.Box3 {
+  const key = JSON.stringify([o.quat, o.scale, o.parts.map((p) => [p.id, p.matrix])]);
+  const cached = shapeCache.get(o.id);
+  if (cached?.key === key) return cached.box;
+  const m = new THREE.Matrix4().compose(new THREE.Vector3(), new THREE.Quaternion(...o.quat), new THREE.Vector3(...o.scale));
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  for (const p of o.parts) {
+    const g = geometries.get(p.id);
+    if (!g) continue;
+    const pm = m.clone().multiply(partMatrix(p));
+    const pos = g.getAttribute('position') as THREE.BufferAttribute;
+    // From the vertices: rotated bounding boxes overestimate and would leave objects floating.
+    for (let i = 0; i < pos.count; i++) box.expandByPoint(v.fromBufferAttribute(pos, i).applyMatrix4(pm));
+  }
+  shapeCache.set(o.id, { key, box });
+  return box;
+}
+
+/** Where the object sits: position, rotation and scale, with Z chosen so it rests on the bed. */
+export function objectMatrix(o: SceneObject): THREE.Matrix4 {
+  const m = new THREE.Matrix4().compose(new THREE.Vector3(o.x, o.y, 0), new THREE.Quaternion(...o.quat), new THREE.Vector3(...o.scale));
+  const box = shapeBox(o);
+  if (!box.isEmpty()) m.setPosition(o.x, o.y, -box.min.z);
   return m;
 }
 
-export function objectSize(o: SceneObject, geometry: THREE.BufferGeometry): THREE.Vector3 {
-  const box = new THREE.Box3().setFromBufferAttribute(geometry.getAttribute('position') as THREE.BufferAttribute).applyMatrix4(objectMatrix(o, geometry));
-  return box.getSize(new THREE.Vector3());
+/** Bounding box on the bed, in millimetres. */
+export function objectBounds(o: SceneObject): THREE.Box3 {
+  const box = shapeBox(o);
+  if (box.isEmpty()) return box.clone();
+  return box.clone().translate(new THREE.Vector3(o.x, o.y, -box.min.z));
 }
 
-/** Binary STL in bed coordinates. */
-export function toStl(geometry: THREE.BufferGeometry, matrix: THREE.Matrix4): ArrayBuffer {
-  const pos = geometry.getAttribute('position');
-  const triangles = pos.count / 3;
-  const buffer = new ArrayBuffer(84 + triangles * 50);
-  const view = new DataView(buffer);
-  view.setUint32(80, triangles, true);
-  const a = new THREE.Vector3();
-  const b = new THREE.Vector3();
-  const c = new THREE.Vector3();
-  const n = new THREE.Vector3();
-  const ab = new THREE.Vector3();
-  const ac = new THREE.Vector3();
-  let o = 84;
-  for (let i = 0; i < triangles; i++) {
-    a.fromBufferAttribute(pos, i * 3).applyMatrix4(matrix);
-    b.fromBufferAttribute(pos, i * 3 + 1).applyMatrix4(matrix);
-    c.fromBufferAttribute(pos, i * 3 + 2).applyMatrix4(matrix);
-    n.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a)).normalize();
-    for (const v of [n, a, b, c]) {
-      view.setFloat32(o, v.x, true);
-      view.setFloat32(o + 4, v.y, true);
-      view.setFloat32(o + 8, v.z, true);
-      o += 12;
-    }
-    o += 2;
-  }
-  return buffer;
+export function partWorldMatrix(o: SceneObject, p: Part): THREE.Matrix4 {
+  return objectMatrix(o).multiply(partMatrix(p));
 }
+
+export const triangleCount = (partId: string) => (geometries.get(partId)?.getAttribute('position').count ?? 0) / 3;

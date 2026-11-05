@@ -37,24 +37,31 @@ export interface HeadConfig {
   color: string;
 }
 
-export interface SliceObject {
-  id: string;
-  name: string;
-  /** 0-based toolhead index. */
-  head: number;
-  /** Binary STL with the object's position, rotation and scale already applied, in bed coordinates (mm). */
-  stl: ArrayBuffer;
-  /** Settings changed only for this object (Orca keys → Orca values). */
-  overrides: Record<string, string>;
-}
-
-export interface SliceRequest {
+export interface SettingsRequest {
   machine: string;
   process: string;
   processOverrides: Record<string, string>;
   machineOverrides: Record<string, string>;
   heads: HeadConfig[];
-  objects: SliceObject[];
+  /** Per toolhead: filament settings changed in Sepia. "" means "use the printer's value" (Orca's nil). */
+  filamentOverrides: Record<string, string>[];
+}
+
+export interface SliceRequest extends SettingsRequest {
+  /** One plate as an Orca-style 3MF, without project_settings.config: the main process adds it. */
+  project: Uint8Array;
+  objectCount: number;
+}
+
+/** A problem Orca reported while slicing. */
+export interface SliceWarning {
+  /** Stable id for the UI to translate, e.g. "floating-regions", "empty-layer", "partly-outside-bed". */
+  code: string;
+  /** Orca's own text, in English. */
+  message: string;
+  objectName?: string;
+  /** Print height in mm, as Orca reports it (it gives heights, not layer numbers). */
+  layer?: number;
 }
 
 export interface SliceResult {
@@ -64,13 +71,18 @@ export interface SliceResult {
   error?: string;
   /** Last lines of Orca's log, to show when something fails. */
   log?: string;
+  /** What Orca warned about, whether or not the slice succeeded. */
+  warnings?: SliceWarning[];
   durationMs: number;
 }
 
 export interface OpenedModel {
   name: string;
+  /** Format of `data`: stl, 3mf or obj. STEP arrives already converted to stl. */
   ext: string;
   data: ArrayBuffer;
+  /** Set when the main process could not convert the file, so the UI reports it as unreadable. */
+  error?: string;
 }
 
 export interface HeaterReading {
@@ -113,7 +125,14 @@ export type MenuCommand =
   | 'palette'
   | 'toggleLeft'
   | 'toggleRight'
-  | 'slice';
+  | 'slice'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'duplicate'
+  | 'selectAll'
+  | 'clearRecent'
+  | 'addPlate';
 
 export interface DocumentInfo {
   title: string;
@@ -131,16 +150,27 @@ export interface SepiaApi {
   resolveMachine(name: string, processName: string): Promise<Config>;
   resolveFilament(name: string): Promise<Config>;
   openModels(): Promise<OpenedModel[]>;
+  /** Converts a dropped file the renderer cannot read itself (STEP) into one it can. */
+  convertModel(name: string, ext: string, data: ArrayBuffer): Promise<OpenedModel>;
   slice(request: SliceRequest): Promise<SliceResult>;
   saveGcode(gcode: string, suggestedName: string): Promise<string | null>;
   printerStatus(host: string): Promise<PrinterStatus>;
   printerUpload(host: string, gcode: string, filename: string, start: boolean): Promise<PrinterStatus>;
   printerSnapshot(host: string): Promise<string | null>;
   setNativeTheme(theme: 'system' | 'light' | 'dark'): Promise<void>;
-  projectSave(data: Uint8Array, path: string | null, suggestedName: string): Promise<string | null>;
+  /** Saves a 3MF project, adding Orca's full config to it. Asks where if `path` is null. */
+  projectSave(data: Uint8Array, settings: SettingsRequest, path: string | null, suggestedName: string): Promise<string | null>;
   projectOpen(): Promise<{ path: string; data: Uint8Array } | null>;
   /** Asks a question with native buttons; resolves to the index of the button pressed. */
   ask(message: string, detail: string, buttons: string[]): Promise<number>;
   setDocument(info: DocumentInfo): Promise<void>;
   onMenu(listener: (command: MenuCommand) => void): () => void;
+  /** Reads a file by path (recent projects); null if it is gone. */
+  readFile(path: string): Promise<Uint8Array | null>;
+  /** Keeps the "Open recent" menu in step. */
+  setRecent(paths: string[]): Promise<void>;
+  /** Files opened from Finder, the Dock, the command line or the "Open recent" menu. */
+  onOpenFile(listener: (file: { path: string; name: string; ext: string; data: Uint8Array }) => void): () => void;
+  /** Copy, paste… in a text field: the native commands, which the menu otherwise sends to the objects. */
+  nativeEdit(command: 'cut' | 'copy' | 'paste' | 'selectAll'): Promise<void>;
 }

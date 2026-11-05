@@ -1,16 +1,13 @@
 // "Arrange": works out each object's footprint on the bed and packs them without overlaps.
-import * as THREE from 'three';
 import { BED } from './stage';
-import { geometries, objectMatrix } from './models';
+import { objectBounds } from './models';
 import { pack, type PackItem, type Rect } from './pack';
 import type { SceneObject } from '../state/app';
 
 export type { Rect } from './pack';
 
 function footprint(o: SceneObject): PackItem {
-  const geometry = geometries.get(o.id)!;
-  const position = geometry.getAttribute('position') as THREE.BufferAttribute;
-  const box = new THREE.Box3().setFromBufferAttribute(position).applyMatrix4(objectMatrix(o, geometry));
+  const box = objectBounds(o);
   return { id: o.id, w: box.max.x - box.min.x, h: box.max.y - box.min.y, dx: box.min.x - o.x, dy: box.min.y - o.y };
 }
 

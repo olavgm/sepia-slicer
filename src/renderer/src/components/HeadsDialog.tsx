@@ -1,4 +1,5 @@
 import { useApp } from '../state/app';
+import { loadFilamentBases } from '../actions';
 import { useT } from '../i18n';
 import { Swatch } from './LeftPanel';
 
@@ -31,7 +32,10 @@ export function HeadsDialog() {
                     <select
                       id={`head-${i}-filament`}
                       value={h.filament}
-                      onChange={(e) => useApp.getState().setHead(i, { ...h, filament: e.target.value })}
+                      onChange={(e) => {
+                        useApp.getState().setHead(i, { ...h, filament: e.target.value });
+                        loadFilamentBases();
+                      }}
                     >
                       {!filaments.some((f) => f.name === h.filament) && <option value={h.filament}>{h.filament}</option>}
                       {filaments.map((f) => (

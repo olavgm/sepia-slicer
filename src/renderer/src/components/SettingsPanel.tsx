@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { SECTIONS, SETTINGS } from '@shared/settings-schema';
 import type { SectionDef, SettingDef } from '@shared/settings-types';
+import { FILAMENT_SECTIONS, FILAMENT_SETTINGS, type FilamentSettingDef } from '@shared/filament-schema';
+import { filamentValue } from '../state/app';
 import { useShallow } from 'zustand/react/shallow';
-import { useApp, plateValue, profileValue, objectValue, type SceneObject } from '../state/app';
+import { useApp, plateValue, profileValue, objectValue, singleSelection, plateIndex, type SceneObject } from '../state/app';
 import { fmt, useT } from '../i18n';
 import { describeValue, displayNumber, isOn, parseNumber, toggleValue } from '../settings/format';
 import { selectProfile } from '../actions';
@@ -13,14 +15,12 @@ const BY_SECTION = new Map(SECTIONS.map((s) => [s.id, SETTINGS.filter((d) => d.s
 
 export function SettingsPanel() {
   const { t } = useT();
-  const selectedId = useApp((s) => s.selectedId);
-  const objects = useApp((s) => s.objects);
+  const selected = useApp(singleSelection);
   const ready = useApp((s) => Object.keys(s.processBase).length > 0);
   const engine = useApp((s) => s.engine);
-  const selected = objects.find((o) => o.id === selectedId) ?? null;
 
   return (
-    <aside className="right" aria-label={t.settings.plateTitle.replace(' {n}', '')}>
+    <aside className="right" aria-label={t.settings.plateTitle}>
       {selected ? <PieceHeader object={selected} /> : <PlateHeader />}
       <div className="settings-scroll">
         {!ready ? (
@@ -28,7 +28,10 @@ export function SettingsPanel() {
         ) : selected ? (
           <PieceList object={selected} />
         ) : (
-          <PlateList />
+          <>
+            <PlateList />
+            <FilamentList />
+          </>
         )}
       </div>
     </aside>
@@ -56,7 +59,7 @@ function PlateHeader() {
   return (
     <div className="settings-head">
       <div className="row between">
-        <h2>{fmt(t.settings.plateTitle, { n: 1 })}</h2>
+        <h2>{t.settings.plateTitle}</h2>
         <div style={{ position: 'relative' }}>
           <button className="icon-btn" aria-label={t.actions.moreOptions} aria-expanded={menu} onClick={() => setMenu((v) => !v)}>
             <Icon name="more" size={18} />
@@ -136,11 +139,12 @@ function PlateHeader() {
 
 function PieceHeader({ object }: { object: SceneObject }) {
   const { t } = useT();
+  const plateNumber = useApp((s) => plateIndex(s.plates, object.plate));
   return (
     <div className="settings-head" style={{ gap: 6 }}>
       <nav className="crumbs" aria-label="Breadcrumb">
-        <button className="link-btn" onClick={() => useApp.setState({ selectedId: null })}>
-          {fmt(t.left.plate, { n: 1 })}
+        <button className="link-btn" onClick={() => useApp.getState().select([])}>
+          {fmt(t.left.plate, { n: plateNumber })}
         </button>
         <Icon name="chevRight" size={14} />
         <span>{object.name}</span>
@@ -313,8 +317,10 @@ function PieceList({ object }: { object: SceneObject }) {
 
 // ---------- One setting ----------
 
+type RowDef = Pick<SettingDef, 'key' | 'kind' | 'unit' | 'percent' | 'min' | 'max' | 'options' | 'label' | 'help'> & { nullable?: boolean };
+
 interface RowProps {
-  def: SettingDef;
+  def: RowDef;
   value: string;
   changed: boolean;
   dim?: boolean;
@@ -380,7 +386,7 @@ function Control({
   layersWord,
 }: {
   id: string;
-  def: SettingDef;
+  def: RowDef;
   value: string;
   onChange(v: string): void;
   lang: 'en' | 'es';
@@ -410,6 +416,11 @@ function Control({
   }
   const unit = def.unit === 'layers' ? layersWord : def.unit;
   const commit = () => {
+    // A filament override left empty means "use the printer's value".
+    if (def.nullable && draft.trim() === '') {
+      if (value !== '') onChange('');
+      return;
+    }
     const parsed = parseNumber(def, draft);
     if (parsed === null) setDraft(shown);
     else if (parsed !== value) onChange(parsed);
@@ -422,6 +433,7 @@ function Control({
         inputMode="decimal"
         value={draft}
         style={{ width: Math.max(32, draft.length * 9 + 8) }}
+        placeholder={def.nullable ? '—' : undefined}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -433,3 +445,87 @@ function Control({
     </span>
   );
 }
+
+// ---------- Filament settings, per toolhead ----------
+
+const FILAMENT_BY_SECTION = new Map(FILAMENT_SECTIONS.map((sec) => [sec.id, FILAMENT_SETTINGS.filter((d) => d.section === sec.id)]));
+
+function FilamentList() {
+  const { t, L, lang } = useT();
+  const heads = useApp((s) => s.heads);
+  const head = useApp((s) => s.filamentHead);
+  const base = useApp((s) => s.filamentBase[s.filamentHead]);
+  const own = useApp((s) => s.filamentOverrides[s.filamentHead]);
+  const onlyChanged = useApp((s) => s.onlyChanged);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  if (!base || Object.keys(base).length === 0) return null;
+  const value = (d: FilamentSettingDef) => own?.[d.key] ?? filamentValue(base, d.key);
+  const changed = (d: FilamentSettingDef) => own !== undefined && d.key in own;
+  const total = FILAMENT_SETTINGS.filter(changed).length;
+
+  return (
+    <section aria-label={t.filament.title} className="filament-block">
+      <div className="filament-head">
+        <h3 style={{ margin: 0, fontSize: 15 }}>
+          {t.filament.title}
+          {total > 0 && (
+            <span className="badge" style={{ marginLeft: 8 }}>
+              {total}
+            </span>
+          )}
+        </h3>
+        <div className="seg" role="radiogroup" aria-label={t.filament.head}>
+          {heads.map((h, i) => (
+            <button key={i} role="radio" aria-checked={head === i} aria-pressed={head === i} onClick={() => useApp.setState({ filamentHead: i })} title={h.filament}>
+              <span className="swatch" aria-hidden="true" style={{ width: 10, height: 10, background: h.color }} /> {i + 1}
+            </button>
+          ))}
+        </div>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          {fmt(t.filament.profile, { name: heads[head].filament.replace(/ @U1$/, '') })}
+        </p>
+      </div>
+      {FILAMENT_SECTIONS.map((section) => {
+        const defs = FILAMENT_BY_SECTION.get(section.id) ?? [];
+        const showAll = expanded[section.id];
+        const visible = defs.filter((d) => (onlyChanged ? changed(d) : d.basic || showAll || changed(d)));
+        if (onlyChanged && visible.length === 0) return null;
+        const count = defs.filter(changed).length;
+        return (
+          <section key={section.id} aria-label={section.id}>
+            <h3 className="section-head">
+              <button aria-expanded="true" onClick={() => setExpanded((e) => ({ ...e, [section.id]: !showAll }))}>
+                <span style={{ flex: 1 }}>{L(section.label)}</span>
+                {count > 0 && <span className="badge">{count}</span>}
+              </button>
+            </h3>
+            {visible.map((d) => {
+              const original = filamentValue(base, d.key);
+              const isChanged = changed(d);
+              const shownOriginal = original === '' ? t.filament.printerValue : describeValue(d, original, lang, t.settings.layers);
+              return (
+                <SettingRow
+                  key={d.key}
+                  idPrefix={`f${head}`}
+                  def={d}
+                  value={value(d)}
+                  changed={isChanged}
+                  note={isChanged ? fmt(t.settings.profileHas, { value: shownOriginal }) : undefined}
+                  undoLabel={isChanged ? fmt(t.actions.resetTo, { value: shownOriginal }) : undefined}
+                  onUndo={() => useApp.getState().setFilamentSetting(head, d.key, null)}
+                  onChange={(v) => useApp.getState().setFilamentSetting(head, d.key, v)}
+                />
+              );
+            })}
+            {!onlyChanged && defs.length > visible.length && (
+              <button className="more-btn" onClick={() => setExpanded((e) => ({ ...e, [section.id]: true }))}>
+                {fmt(t.actions.showMore, { count: defs.length - visible.length })}
+              </button>
+            )}
+          </section>
+        );
+      })}
+    </section>
+  );
+}
+

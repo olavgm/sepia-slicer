@@ -11,6 +11,14 @@ const LABELS: Record<Lang, Record<string, string>> = {
     save: 'Save',
     saveAs: 'Save as…',
     addModel: 'Add model…',
+    openRecent: 'Open recent',
+    clearRecent: 'Clear the list',
+    cut: 'Cut',
+    copy: 'Copy',
+    paste: 'Paste',
+    duplicate: 'Duplicate',
+    selectAll: 'Select all',
+    addPlate: 'New plate',
     exportGcode: 'Export G-code…',
     edit: 'Edit',
     undo: 'Undo',
@@ -31,6 +39,14 @@ const LABELS: Record<Lang, Record<string, string>> = {
     save: 'Guardar',
     saveAs: 'Guardar como…',
     addModel: 'Añadir modelo…',
+    openRecent: 'Abrir reciente',
+    clearRecent: 'Borrar la lista',
+    cut: 'Cortar',
+    copy: 'Copiar',
+    paste: 'Pegar',
+    duplicate: 'Duplicar',
+    selectAll: 'Seleccionar todo',
+    addPlate: 'Placa nueva',
     exportGcode: 'Exportar G-code…',
     edit: 'Edición',
     undo: 'Deshacer',
@@ -46,7 +62,7 @@ const LABELS: Record<Lang, Record<string, string>> = {
   },
 };
 
-export function buildMenu(win: BrowserWindow, lang: Lang): void {
+export function buildMenu(win: BrowserWindow, lang: Lang, recent: string[], openRecent: (path: string) => void): void {
   const l = LABELS[lang];
   const send = (command: MenuCommand) => () => win.webContents.send('menu', command);
   // Shortcuts the page handles itself are shown in the menu but not registered, so they keep reaching the page.
@@ -59,11 +75,21 @@ export function buildMenu(win: BrowserWindow, lang: Lang): void {
       submenu: [
         { label: l.new, accelerator: 'CmdOrCtrl+N', click: send('new') },
         { label: l.open, accelerator: 'CmdOrCtrl+O', click: send('open') },
+        {
+          label: l.openRecent,
+          enabled: recent.length > 0,
+          submenu: [
+            ...recent.map((path) => ({ label: path.split(/[\\/]/).pop()!, toolTip: path, click: () => openRecent(path) })),
+            { type: 'separator' as const },
+            { label: l.clearRecent, click: send('clearRecent') },
+          ],
+        },
         { type: 'separator' },
         { label: l.save, accelerator: 'CmdOrCtrl+S', click: send('save') },
         { label: l.saveAs, accelerator: 'Shift+CmdOrCtrl+S', click: send('saveAs') },
         { type: 'separator' },
         { label: l.addModel, accelerator: 'CmdOrCtrl+I', click: send('addModel') },
+        { label: l.addPlate, accelerator: 'Shift+CmdOrCtrl+N', click: send('addPlate') },
         { label: l.exportGcode, accelerator: 'CmdOrCtrl+E', click: send('exportGcode') },
         ...(process.platform === 'darwin' ? [] : [{ type: 'separator' as const }, { role: 'quit' as const }]),
       ],
@@ -74,10 +100,12 @@ export function buildMenu(win: BrowserWindow, lang: Lang): void {
         { label: l.undo, accelerator: 'CmdOrCtrl+Z', click: send('undo') },
         { label: l.redo, accelerator: 'Shift+CmdOrCtrl+Z', click: send('redo') },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' },
+        // Text fields get the native commands; elsewhere they act on the selected objects.
+        { label: l.cut, accelerator: 'CmdOrCtrl+X', click: send('cut') },
+        { label: l.copy, accelerator: 'CmdOrCtrl+C', click: send('copy') },
+        { label: l.paste, accelerator: 'CmdOrCtrl+V', click: send('paste') },
+        { label: l.duplicate, accelerator: 'CmdOrCtrl+D', click: send('duplicate') },
+        { label: l.selectAll, accelerator: 'CmdOrCtrl+A', click: send('selectAll') },
         { type: 'separator' },
         { label: l.arrange, ...shown('A'), click: send('arrange') },
         { label: l.delete, ...shown('Backspace'), click: send('delete') },

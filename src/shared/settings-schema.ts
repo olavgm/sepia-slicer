@@ -826,6 +826,27 @@ export const SETTINGS: SettingDef[] = [
 
   // ─── Bed adhesion ───────────────────────────────────────────────────────────
   {
+    // A project setting rather than a process one, but it decides the bed temperature, so it lives here.
+    key: 'curr_bed_type',
+    section: 'adhesion',
+    kind: 'select',
+    scope: 'process',
+    basic: true,
+    perObject: false,
+    options: [
+      { value: 'High Temp Plate', label: { en: 'High Temp Plate (smooth PEI)', es: 'Placa de alta temperatura (PEI liso)' } },
+      { value: 'Textured PEI Plate', label: { en: 'Textured PEI Plate', es: 'Placa PEI texturizada' } },
+      { value: 'Cool Plate', label: { en: 'Cool Plate', es: 'Placa fría' } },
+      { value: 'Engineering Plate', label: { en: 'Engineering Plate', es: 'Placa de ingeniería' } },
+    ],
+    label: { en: 'Build plate', es: 'Placa de impresión' },
+    help: {
+      en: 'The sheet on the bed. It sets the bed temperature from each filament; the U1 filament profiles only give one for the High Temp Plate.',
+      es: 'La lámina que hay en la cama. Decide la temperatura de la cama según cada filamento; los perfiles de filamento de la U1 solo la dan para la placa de alta temperatura.',
+    },
+    keywords: ['bed type', 'plate type', 'PEI', 'tipo de placa', 'cama', 'temperatura de la cama'],
+  },
+  {
     key: 'brim_type',
     section: 'adhesion',
     kind: 'select',

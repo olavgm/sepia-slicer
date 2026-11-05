@@ -3,7 +3,8 @@
 // saving and opening a project, and talking to a printer (a fake Moonraker on localhost).
 // Saves a screenshot of each screen. Usage: npm run build && node scripts/smoke.mjs <screenshot-folder>
 import { _electron as electron } from 'playwright-core';
-import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,7 +27,8 @@ function prismStl(w, d, h, sides = 4) {
   for (let i = 0; i < sides; i++) {
     const [x1, y1] = ring[i];
     const [x2, y2] = ring[(i + 1) % sides];
-    tris.push([[x1, y1, 0], [x2, y2, h], [x2, y2, 0]], [[x1, y1, 0], [x1, y1, h], [x2, y2, h]]);
+    // Counter-clockwise seen from outside, like the caps, so the mesh is consistently oriented.
+    tris.push([[x1, y1, 0], [x2, y2, 0], [x2, y2, h]], [[x1, y1, 0], [x2, y2, h], [x1, y1, h]]);
     tris.push([[0, 0, 0], [x2, y2, 0], [x1, y1, 0]], [[0, 0, h], [x1, y1, h], [x2, y2, h]]);
   }
   const buf = Buffer.alloc(84 + tris.length * 50);
@@ -91,7 +93,7 @@ const printerHost = `127.0.0.1:${moonraker.address().port}`;
 
 // ---------- The app ----------
 const userData = mkdtempSync(join(tmpdir(), 'sepia-smoke-'));
-const projectFile = join(userData, 'prueba.sepia');
+const projectFile = join(userData, 'prueba.3mf');
 const app = await electron.launch({ executablePath: require('electron'), args: ['.'], env: { ...process.env, SEPIA_USER_DATA: userData } });
 // Native file dialogs cannot be clicked from a test: answer them with our project path.
 await app.evaluate(({ dialog }, path) => {
@@ -103,6 +105,11 @@ const menu = (command) => app.evaluate(({ BrowserWindow }, c) => BrowserWindow.g
 const title = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].getTitle());
 
 const page = await app.firstWindow();
+// Show what goes wrong inside the page, so a failing step says why.
+page.on('pageerror', (error) => console.log('  page error:', error.message));
+page.on('console', (message) => {
+  if (message.type() === 'error') console.log('  console error:', message.text());
+});
 await page.setViewportSize({ width: 1440, height: 900 });
 await page.evaluate(() => {
   localStorage.setItem('sepia-prefs', JSON.stringify({ state: { theme: 'light', lang: 'es', printerHost: '' }, version: 0 }));
@@ -123,6 +130,12 @@ await page.evaluate(
 );
 await page.waitForSelector('.obj-row >> nth=1');
 const rows = () => page.locator('.obj-row').count();
+/** Selects only object row `n` (clicking a selected row would deselect it). */
+async function selectRow(n) {
+  const button = page.locator(`.obj-row >> nth=${n} >> button >> nth=0`);
+  if ((await button.getAttribute('aria-pressed')) !== 'true' || (await page.locator('.obj-row[data-selected="true"]').count()) > 1) await button.click();
+  if ((await button.getAttribute('aria-pressed')) !== 'true') await button.click();
+}
 assert.equal(await rows(), 2);
 
 step('arrange with the A key');
@@ -182,6 +195,45 @@ await page.screenshot({ path: `${out}/6-preview-folded.png` });
 await page.click('.panel-handle.left');
 await page.click('.panel-handle.right');
 
+step('only this layer, moves inside it, pick a line');
+await page.click('.views button >> nth=1');
+await page.click('.only-layer');
+assert.equal(await page.getAttribute('.only-layer', 'aria-pressed'), 'true');
+await page.waitForTimeout(400);
+await page.screenshot({ path: `${out}/6a-only-layer.png` });
+const layerMoves = Number(await page.getAttribute('#move-range', 'max'));
+assert.ok(layerMoves > 10, `the layer has moves (${layerMoves})`);
+await page.fill('#move-range', String(Math.round(layerMoves * 0.08)));
+await page.waitForTimeout(300);
+assert.equal(await page.textContent('.move-count'), `${Math.round(layerMoves * 0.08)}/${layerMoves}`);
+await page.screenshot({ path: `${out}/6b-moves.png` });
+// Click around the middle of the plate, where the models are, until a line answers.
+const canvasBox = await page.locator('.center canvas').boundingBox();
+const middle = { x: canvasBox.x + canvasBox.width / 2, y: canvasBox.y + canvasBox.height / 2 };
+let pickedLine = false;
+for (let r = 0; r <= 240 && !pickedLine; r += 8) {
+  const around = Math.max(1, Math.round(r / 3));
+  for (let i = 0; i < around && !pickedLine; i++) {
+    const a = (i / around) * Math.PI * 2;
+    await page.mouse.click(middle.x + Math.cos(a) * r, middle.y + Math.sin(a) * r);
+    pickedLine = (await page.locator('.line-card').count()) > 0;
+  }
+}
+assert.ok(pickedLine, 'clicking a line opens its card');
+const card = (await page.textContent('.line-card'))?.replace(/\s+/g, ' ');
+console.log('  ', card);
+assert.match(card ?? '', /mm\/s/);
+await page.screenshot({ path: `${out}/6c-pick.png` });
+if ((await page.locator('.line-card-setting .btn').count()) > 0) {
+  await page.click('.line-card-setting .btn');
+  await page.waitForSelector('.setting[data-highlight="true"]');
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${out}/6d-pick-setting.png` });
+}
+await page.click('.line-card .icon-btn');
+await page.click('.only-layer');
+await page.click('.views button >> nth=0');
+
 step('save, new, open');
 assert.equal(await page.locator('.brand .edited').count(), 1, 'shown as edited before saving');
 await menu('save');
@@ -198,6 +250,85 @@ assert.equal(await rows(), 2, 'project reopened');
 await page.click('.obj-row >> nth=0 >> button >> nth=0');
 assert.equal(await page.inputValue('#s-wall_loops'), '5', 'per-piece setting survived the round trip');
 await page.screenshot({ path: `${out}/7-reopened.png` });
+
+step('exact values: rotate 45° about Z');
+// The box is still selected from the previous step.
+await page.fill('#tf-rZ', '45');
+await page.press('#tf-rZ', 'Enter');
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${out}/7b-transform.png` });
+
+step('duplicate, then move the copy to a new plate');
+await menu('duplicate');
+await page.waitForTimeout(300);
+assert.equal(await rows(), 3, 'duplicated');
+await menu('addPlate');
+await page.waitForTimeout(200);
+assert.equal(await rows(), 0, 'the new plate is empty');
+await page.click('.plate-btn >> nth=0');
+await page.click('.obj-row >> nth=2 >> button >> nth=0');
+await page.click('.obj-row >> nth=2 >> [aria-label^="Más de"]');
+await page.click('.menu button:has-text("Mover a Placa 2")');
+await page.waitForTimeout(300);
+assert.equal(await rows(), 2, 'moved away from plate 1');
+await page.click('.plate-btn >> nth=1');
+assert.equal(await rows(), 1, 'and onto plate 2');
+
+step('a 3MF with two parts on different heads and painted facets');
+await page.evaluate((bytes) => {
+  const dt = new DataTransfer();
+  dt.items.add(new File([new Uint8Array(bytes)], 'piezas.3mf'));
+  document.querySelector('.app').dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+}, [...readFileSync(new URL('./fixtures/parts-and-paint.3mf', import.meta.url))]);
+await page.waitForSelector('.part-list li');
+await page.screenshot({ path: `${out}/7c-parts.png` });
+
+step('paint a face of the box with head 4');
+await selectRow(0);
+await page.click('.toolbar .tool >> nth=5');
+await page.click('.paint-choice >> nth=3');
+await page.check('#brush-fill');
+const canvas = page.locator('.center canvas');
+const box = await canvas.boundingBox();
+// Paint where the selected object is drawn: the middle of its selection box on screen.
+const target = await page.evaluate(() => {
+  const c = document.querySelector('.center canvas').getBoundingClientRect();
+  return { x: c.width / 2, y: c.height / 2 };
+});
+void box;
+await canvas.click({ position: target });
+await page.waitForTimeout(300);
+await page.screenshot({ path: `${out}/7d-paint.png` });
+
+step('slice plate 2 and check the toolheads Orca used');
+await page.click('.toolbar .tool >> nth=0');
+await page.click('.top-actions .btn-primary');
+await page.waitForSelector('.layer-rail', { timeout: 180000 });
+await page.waitForTimeout(500);
+const plate2 = (await page.textContent('.left'))?.replace(/\s+/g, ' ');
+console.log('  ', plate2?.slice(0, 200));
+assert.match(plate2 ?? '', /3 PLA\s*[\d,]+ g/, 'the part on head 3 was printed');
+await page.screenshot({ path: `${out}/7e-plate2-preview.png` });
+
+step('cut the copy on plate 2 in two');
+await page.click('.tabs .tab >> nth=0');
+const before = await rows();
+await selectRow(0);
+await page.click('.toolbar .tool >> nth=4');
+await page.click('.transform-panel .btn-primary');
+await page.waitForTimeout(500);
+assert.equal(await rows(), before + 1, 'one object became two');
+await page.screenshot({ path: `${out}/7f-cut.png` });
+
+step('save the project and slice it with OrcaSlicer itself');
+await menu('save');
+await page.waitForTimeout(1500);
+const orcaOut = mkdtempSync(join(tmpdir(), 'sepia-orca-'));
+execFileSync('/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer', ['--slice', '0', '--outputdir', orcaOut, projectFile], { stdio: 'ignore' });
+const plates = readdirSync(orcaOut).filter((f) => f.endsWith('.gcode')).sort();
+console.log('   OrcaSlicer sliced the saved project:', plates.join(', '));
+assert.deepEqual(plates, ['plate_1.gcode', 'plate_2.gcode'], 'Orca slices both plates of the saved project');
+await page.click('.plate-btn >> nth=0');
 
 step('printer status and camera');
 await page.click('.tabs .tab >> nth=2');

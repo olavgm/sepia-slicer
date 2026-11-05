@@ -584,7 +584,7 @@ kbd {
 }
 .status-pill {
   left: 50%;
-  bottom: 16px;
+  top: 16px;
   transform: translateX(-50%);
   margin: 0;
   padding: 10px 16px;
@@ -1282,3 +1282,119 @@ kbd {
   text-align: center;
   padding: 16px;
 }
+.filament-block {
+  margin-top: 16px;
+  border-top: 2px solid var(--line);
+}
+.filament-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px 12px;
+}
+.filament-head h3 {
+  display: flex;
+  align-items: center;
+}
+.filament-head .seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-soft);
+}
+.warning-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.numfield {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 6px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 13px;
+}
+.numfield input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: right;
+  font-family: var(--mono);
+}
+.numfield-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.numfield-unit {
+  color: var(--muted);
+  font-size: 12px;
+}
+.transform-panel {
+  left: 104px;
+  bottom: 16px;
+  width: 440px;
+  max-width: calc(100% - 130px);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.transform-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 6px;
+}
+.paint-choice {
+  min-height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+}
+.paint-choice[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--tint);
+  font-weight: 600;
+}
+.paint-modes button {
+  border: 1px solid var(--line-soft);
+}
+.part-list {
+  list-style: none;
+  margin: 2px 0 4px 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.part-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 4px 3px 10px;
+  border-left: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+.part-list li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion {
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--tint);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+

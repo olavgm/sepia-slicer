@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useApp } from './state/app';
 import { usePrefs } from './state/prefs';
 import { useResolvedTheme } from './theme';
-import { addModels, arrangeObjects, exportGcode, filesToModels, loadProfiles, openModelsDialog, sliceNow } from './actions';
-import { newProject, openProject, projectName, saveProject } from './project';
+import { addModels, arrangeObjects, copySelection, deleteSelection, duplicateSelection, exportGcode, filesToModels, loadProfiles, openModelsDialog, paste, sliceNow } from './actions';
+import { clearRecent, newProject, openProject, openProjectFile, projectName, recentProjects, saveProject } from './project';
+import { objectsOnPlate } from './state/app';
 import { fmt } from './i18n';
 import type { MenuCommand } from '@shared/types';
 import { useT } from './i18n';
@@ -58,6 +59,19 @@ export function App() {
   }, [dirty, projectPath, lang, t]);
 
   useEffect(() => window.sepia.onMenu(runMenuCommand), []);
+
+  // Files opened from Finder, the Dock or "Open recent": a 3MF is a project, anything else is added to the plate.
+  useEffect(() => {
+    window.sepia.setRecent(recentProjects());
+    return window.sepia.onOpenFile(async (file) => {
+      if (file.ext === '3mf' && useApp.getState().objects.length === 0) await openProjectFile(file.path, file.data);
+      else if (file.ext === '3mf') {
+        const choice = await window.sepia.ask(fmt(t.project.openOrAdd, { name: file.name }), '', [t.project.addToPlate, t.project.openAsProject]);
+        if (choice === 1) await openProjectFile(file.path, file.data);
+        else addModels([{ name: file.name, ext: file.ext, data: file.data.slice().buffer }]);
+      } else addModels([{ name: file.name, ext: file.ext, data: file.data.slice().buffer }]);
+    });
+  }, [t]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -163,7 +177,36 @@ function runMenuCommand(command: MenuCommand): void {
       arrangeObjects();
       break;
     case 'delete':
-      if (!isEditing() && s.selectedId) s.removeObject(s.selectedId);
+      if (!isEditing()) deleteSelection();
+      break;
+    case 'cut':
+      if (isEditing()) window.sepia.nativeEdit('cut');
+      else {
+        copySelection();
+        deleteSelection();
+      }
+      break;
+    case 'copy':
+      if (isEditing()) window.sepia.nativeEdit('copy');
+      else copySelection();
+      break;
+    case 'paste':
+      if (isEditing()) window.sepia.nativeEdit('paste');
+      else paste();
+      break;
+    case 'duplicate':
+      // Text fields have no "duplicate", so ⌘D always means the objects, even right after typing a value.
+      duplicateSelection();
+      break;
+    case 'selectAll':
+      if (isEditing()) window.sepia.nativeEdit('selectAll');
+      else s.select(objectsOnPlate(s).map((o) => o.id));
+      break;
+    case 'clearRecent':
+      clearRecent();
+      break;
+    case 'addPlate':
+      s.addPlate();
       break;
     case 'palette':
       useApp.setState({ paletteOpen: !s.paletteOpen });

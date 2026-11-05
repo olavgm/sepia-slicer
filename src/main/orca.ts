@@ -3,10 +3,16 @@ import { existsSync, readFileSync, readdirSync, mkdtempSync, writeFileSync } fro
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
-import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
-import type { Config, EngineInfo, ProfileCatalog, SliceRequest, SliceResult } from '@shared/types';
+import { unzipSync, zipSync } from 'fflate';
+import type { Config, EngineInfo, ProfileCatalog, SettingsRequest, SliceRequest, SliceResult } from '@shared/types';
+import { collectWarnings, logArgs } from './warnings';
 
 export const U1_MACHINE = 'Snapmaker U1 (0.4 nozzle)';
+/**
+ * The U1's profile names the Textured PEI Plate as default, but its filament profiles only give a bed
+ * temperature for the High Temp Plate: left alone, the CLI slices with the bed off.
+ */
+export const DEFAULT_BED_TYPE = 'High Temp Plate';
 
 interface Candidate {
   app: string;
@@ -123,15 +129,21 @@ const tail = (text: string, lines = 30) => text.split('\n').filter(Boolean).slic
 function writeProfiles(dir: string, machineName: string, processName: string, processOverrides: Record<string, string>, machineOverrides: Record<string, string>) {
   const machine = applyOverrides(resolve('machine', machineName), machineOverrides);
   Object.assign(machine, { name: 'Sepia printer', inherits: machineName, from: 'User' });
-  const process = applyOverrides(resolve('process', processName), processOverrides);
+  const process = applyOverrides({ curr_bed_type: DEFAULT_BED_TYPE, ...resolve('process', processName) }, processOverrides);
   Object.assign(process, { name: 'Sepia process', inherits: processName, from: 'User', compatible_printers: [machineName] });
   writeFileSync(join(dir, 'machine.json'), JSON.stringify(machine));
   writeFileSync(join(dir, 'process.json'), JSON.stringify(process));
   return `${join(dir, 'machine.json')};${join(dir, 'process.json')}`;
 }
 
-function writeFilament(dir: string, index: number, filamentName: string, color: string, machineName: string): string {
+function writeFilament(dir: string, index: number, filamentName: string, color: string, machineName: string, overrides: Record<string, string> = {}): string {
   const f = resolve('filament', filamentName);
+  // Filament values are arrays (one per extruder variant); "" is Orca's "nil", i.e. use the printer's value.
+  for (const [key, value] of Object.entries(overrides)) {
+    const v = value === '' ? 'nil' : value;
+    const current = f[key];
+    f[key] = Array.isArray(current) ? current.map(() => v) : [v];
+  }
   // Orca needs a colour on every filament, or it crashes when several are loaded.
   Object.assign(f, { name: `Sepia head ${index + 1}`, inherits: filamentName, from: 'User', compatible_printers: [machineName], filament_colour: [color] });
   const file = join(dir, `head${index + 1}.json`);
@@ -199,76 +211,64 @@ async function fullConfig(processName: string): Promise<Config> {
 }
 
 export async function resolveProcessForUi(name: string): Promise<Config> {
-  return { ...(await fullConfig(name)), ...resolve('process', name) };
+  return { ...(await fullConfig(name)), curr_bed_type: DEFAULT_BED_TYPE, ...resolve('process', name) };
 }
 
 export async function resolveMachineForUi(name: string, processName: string): Promise<Config> {
   return { ...(await fullConfig(processName)), ...resolve('machine', name) };
 }
 
+
+/** Writes the profiles and the four toolheads' filaments into `dir`; returns the CLI arguments that load them. */
+function writeSettings(dir: string, r: SettingsRequest): string[] {
+  const settings = writeProfiles(dir, r.machine, r.process, r.processOverrides, r.machineOverrides);
+  // All four toolheads are loaded so that head N is always filament N.
+  const filaments = r.heads.map((head, i) => writeFilament(dir, i, head.filament, head.color, r.machine, r.filamentOverrides?.[i]));
+  return ['--load-settings', settings, '--load-filaments', filaments.join(';')];
+}
+
+/**
+ * Adds Orca's full config to a 3MF, as Metadata/project_settings.config. Orca needs it to keep the
+ * toolheads of parts (without four filaments in it, it drops extruders 3 and 4), and it makes the
+ * project open in OrcaSlicer with the same settings.
+ */
+async function withProjectSettings(project: Uint8Array, dir: string, loadArgs: string[]): Promise<Uint8Array> {
+  const info = findEngine();
+  writeFileSync(join(dir, 'probe.stl'), PROBE_STL);
+  const out = join(dir, 'project_settings.json');
+  await run(info.executable!, ['--arrange', '0', ...loadArgs, '--export-settings', out, '--outputdir', dir, join(dir, 'probe.stl')]);
+  if (!existsSync(out)) throw new Error('Orca did not export its settings');
+  const files = unzipSync(project);
+  files['Metadata/project_settings.config'] = new Uint8Array(readFileSync(out));
+  return zipSync(files, { level: 6 });
+}
+
+/** A project ready to save: the 3MF Sepia wrote, plus Orca's full config. */
+export async function finishProject(project: Uint8Array, r: SettingsRequest): Promise<Uint8Array> {
+  const dir = mkdtempSync(join(tmpdir(), 'sepia-project-'));
+  return withProjectSettings(project, dir, writeSettings(dir, r));
+}
+
 export async function slice(request: SliceRequest): Promise<SliceResult> {
   const started = Date.now();
   const info = findEngine();
   if (!info.found || !info.executable) return { ok: false, error: 'engine-not-found', durationMs: 0 };
-  if (request.objects.length === 0) return { ok: false, error: 'no-objects', durationMs: 0 };
+  if (request.objectCount === 0) return { ok: false, error: 'no-objects', durationMs: 0 };
 
   const dir = mkdtempSync(join(tmpdir(), 'sepia-'));
   try {
-    const settings = writeProfiles(dir, request.machine, request.process, request.processOverrides, request.machineOverrides);
-    // All four toolheads are loaded so that head N is always filament N.
-    const filamentFiles = request.heads.map((head, i) => writeFilament(dir, i, head.filament, head.color, request.machine));
-    const modelFiles = request.objects.map((o, i) => {
-      const file = join(dir, `object${i + 1}.stl`);
-      writeFileSync(file, Buffer.from(o.stl));
-      return file;
-    });
-
-    const common = ['--load-settings', settings, '--load-filaments', filamentFiles.join(';'), '--outputdir', dir];
-    const ids = ['--load-filament-ids', request.objects.map((o) => String(o.head + 1)).join(',')];
-    let result: { code: number; output: string };
-    if (request.objects.some((o) => Object.keys(o.overrides).length > 0)) {
-      // Orca's command line has no option for per-object settings, but its 3MF project format does:
-      // export a project, add each object's settings to it, then slice the project.
-      const exported = await run(info.executable, ['--arrange', '0', ...common, ...ids, '--export-3mf', 'project.3mf', ...modelFiles]);
-      const project = join(dir, 'project.3mf');
-      if (exported.code !== 0 || !existsSync(project)) {
-        return { ok: false, error: `orca-exit-${exported.code}`, log: tail(exported.output), durationMs: Date.now() - started };
-      }
-      addObjectSettings(project, Object.fromEntries(request.objects.map((o, i) => [`object${i + 1}.stl`, o.overrides])));
-      result = await run(info.executable, ['--slice', '0', ...common, project]);
-    } else {
-      result = await run(info.executable, ['--slice', '0', '--arrange', '0', ...common, ...ids, ...modelFiles]);
-    }
-    const { code, output } = result;
+    const loadArgs = writeSettings(dir, request);
+    const project = join(dir, 'plate.3mf');
+    writeFileSync(project, await withProjectSettings(new Uint8Array(request.project), dir, loadArgs));
+    // On macOS the CLI only reports its warnings in a log file.
+    const { code, output } = await run(info.executable, ['--slice', '0', ...loadArgs, ...logArgs(dir), '--outputdir', dir, project]);
+    const warnings = collectWarnings(dir, output);
     const gcodePath = join(dir, 'plate_1.gcode');
     if (code !== 0 || !existsSync(gcodePath)) {
-      return { ok: false, error: `orca-exit-${code}`, log: tail(output), durationMs: Date.now() - started };
+      return { ok: false, error: `orca-exit-${code}`, log: tail(output), warnings, durationMs: Date.now() - started };
     }
-    return { ok: true, gcode: readFileSync(gcodePath, 'utf8'), gcodePath, durationMs: Date.now() - started };
+    return { ok: true, gcode: readFileSync(gcodePath, 'utf8'), gcodePath, warnings, durationMs: Date.now() - started };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e), durationMs: Date.now() - started };
   }
 }
-
-/**
- * Writes per-object settings into a 3MF project's model_settings.config. Objects are matched by the
- * name Orca gives them (the model file name), because Orca does not keep them in load order.
- */
-export function addObjectSettings(projectPath: string, overridesByName: Record<string, Record<string, string>>): void {
-  const files = unzipSync(readFileSync(projectPath));
-  const config = 'Metadata/model_settings.config';
-  const xml = strFromU8(files[config]).replace(
-    /(<object id="[^"]*">\s*\n\s*<metadata key="name" value="([^"]*)"\/>\s*\n)/g,
-    (match, _all, name: string) => {
-      const own = overridesByName[name] ?? {};
-      const lines = Object.entries(own)
-        .map(([key, value]) => `    <metadata key="${escapeXml(key)}" value="${escapeXml(value)}"/>\n`)
-        .join('');
-      return match + lines;
-    },
-  );
-  files[config] = strToU8(xml);
-  writeFileSync(projectPath, zipSync(files));
-}
-
-const escapeXml = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

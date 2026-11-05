@@ -1,0 +1,135 @@
+/* Preview: the bar for looking inside a layer, and the card of a picked line. */
+
+.legend-hint {
+  margin: 0;
+  padding: 6px 4px 0;
+  border-top: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Sits right above the play bar, centred like it. */
+.move-bar {
+  left: 50%;
+  bottom: 70px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 14px 4px 4px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.only-layer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 12px 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+}
+.only-layer:hover {
+  background: var(--soft-fill);
+}
+.only-layer[aria-pressed='true'] {
+  background: var(--tint);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.move-bar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line-soft);
+}
+.move-range {
+  width: 200px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.move-range:disabled {
+  cursor: default;
+}
+.move-count {
+  min-width: 11ch;
+  font-size: 12px;
+  text-align: right;
+}
+
+.line-card {
+  z-index: 3;
+  left: 0;
+  top: 0;
+  width: 248px;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+}
+.line-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.line-card-head strong {
+  flex: 1 1 auto;
+  font-size: 14px;
+}
+.line-card-head .icon-btn {
+  width: 28px;
+  height: 28px;
+  margin: -4px -6px -4px 0;
+}
+.line-card .line-swatch {
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  flex: none;
+}
+.line-card-head-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+.line-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line-soft);
+}
+.line-card dt {
+  color: var(--muted);
+}
+.line-card dd {
+  margin: 0;
+  text-align: right;
+}
+.line-card-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-soft);
+}
+.line-card-setting .btn {
+  min-height: 34px;
+  justify-content: space-between;
+  padding: 0 10px 0 12px;
+  font-size: 13px;
+  white-space: normal;
+  text-align: left;
+}
+.line-card-setting .btn:hover {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}

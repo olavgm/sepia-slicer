@@ -4,7 +4,8 @@ import { useApp, plateValue } from '../state/app';
 import { usePrefs } from '../state/prefs';
 import { fmt, useT } from '../i18n';
 import { describeValue } from '../settings/format';
-import { arrangeObjects, exportGcode, openModelsDialog, sliceNow } from '../actions';
+import { arrangeObjects, deleteSelection, duplicateSelection, exportGcode, mirrorSelection, openModelsDialog, sliceNow } from '../actions';
+import { objectsOnPlate } from '../state/app';
 import { newProject, openProject, saveProject } from '../project';
 import { Icon, type IconName } from './Icon';
 
@@ -65,28 +66,28 @@ export function CommandPalette() {
           crumb: sectionLabel(def.section),
           title: L(def.label),
           value: describeValue(def, plateValue(state, def.key), lang, t.settings.layers),
-          chip: def.scope === 'machine' ? 'Snapmaker U1' : fmt(t.left.plate, { n: 1 }),
+          chip: def.scope === 'machine' ? 'Snapmaker U1' : t.settings.allPlates,
           run: () => {
             close();
-            useApp.setState({ selectedId: null });
+            useApp.getState().select([]);
             state.focusSetting(def.key);
           },
           score: sc,
         });
       }
     }
-    for (const o of state.objects) {
+    for (const o of objectsOnPlate(state)) {
       const sc = score(query, [o.name]);
       if (!sc) continue;
       out.push({
         id: `o:${o.id}`,
         group: 'objects',
         title: o.name,
-        sub: `${fmt(t.left.plate, { n: 1 })} · ${t.heads.head.replace('{n}', String(o.head + 1))}`,
+        sub: o.parts.length > 1 ? fmt(t.objects.parts, { count: o.parts.length }) : t.heads.head.replace('{n}', String(o.head + 1)),
         icon: 'cube',
         run: () => {
           close();
-          useApp.setState({ selectedId: o.id, tab: 'prepare' });
+          useApp.setState({ selectedIds: [o.id], tab: 'prepare' });
         },
         score: sc + 1,
       });
@@ -118,7 +119,15 @@ export function CommandPalette() {
       [t.commands.langEs, 'globe', () => prefs.setLang('es')],
     ];
     if (state.gcode) actions.push([t.commands.exportGcode, 'download', () => exportGcode()]);
-    if (state.selectedId) actions.push([t.commands.deleteSelected, 'trash', () => state.removeObject(state.selectedId!)]);
+    if (state.selectedIds.length) {
+      actions.push([t.commands.deleteSelected, 'trash', () => deleteSelection()]);
+      actions.push([t.commands.duplicate, 'plus', () => duplicateSelection()]);
+      actions.push([t.commands.mirrorX, 'scale', () => mirrorSelection(0)]);
+      actions.push([t.commands.mirrorY, 'scale', () => mirrorSelection(1)]);
+      actions.push([t.commands.mirrorZ, 'scale', () => mirrorSelection(2)]);
+    }
+    actions.push([t.commands.addPlate, 'plus', () => state.addPlate()]);
+    actions.push([t.commands.selectAll, 'arrange', () => state.select(objectsOnPlate(useApp.getState()).map((o) => o.id))]);
     for (const [title, icon, run] of actions) {
       const sc = score(query, [title]);
       if (!sc || !query) continue;

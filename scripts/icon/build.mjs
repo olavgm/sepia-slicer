@@ -26,5 +26,5 @@ mkdirSync(join(bundle, 'Assets'), { recursive: true });
 make(join(bundle, 'icon.json'), '--json');
 const layerSvg = join(build, 'icon-layer.svg');
 make(layerSvg, '--layer');
-render(layerSvg, join(bundle, 'Assets', 'cuttlefish.png'));
+render(layerSvg, join(bundle, 'Assets', 'cube.png'));
 console.log('build/icon.svg, build/icon.png, build/icon-layer.svg and build/icon.icon are ready');

@@ -41,7 +41,7 @@ Other scripts:
 | `npm run smoke` | Builds the app and drives it end to end: models on several toolheads, a per-piece setting, arrange, undo/redo, exact values, duplicate, two plates, a 3MF with parts and painted faces, painting, cutting, slicing with Orca, saving a project and slicing it with OrcaSlicer itself, and a fake printer. Screenshots go to `smoke-shots/` |
 | `npm run typecheck` | TypeScript checks |
 | `npm run dist` | Packages a macOS app with electron-builder. Needs Xcode 26 or later to compile the icon |
-| `npm run icon` | Redraws the icon (a cuttlefish made of printed layers) from `scripts/icon/make.mjs` into `build/`: the Icon Composer `icon.icon` for the app and `icon.png` for the Dock in development |
+| `npm run icon` | Redraws the icon (a cube sliced into layers) from `scripts/icon/make.mjs` into `build/`: the Icon Composer `icon.icon` for the app and `icon.png` for the Dock in development |
 
 ## How it works
 

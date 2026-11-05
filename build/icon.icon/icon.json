@@ -1,8 +1,8 @@
 {
   "fill": {
     "linear-gradient": [
-      "srgb:0.65882,0.44314,0.24706,1.00000",
-      "srgb:0.27843,0.15686,0.05882,1.00000"
+      "srgb:0.16863,0.37255,0.89020,1.00000",
+      "srgb:0.04706,0.11373,0.32157,1.00000"
     ],
     "orientation": {
       "start": {
@@ -19,8 +19,8 @@
     {
       "layers": [
         {
-          "name": "cuttlefish",
-          "image-name": "cuttlefish.png"
+          "name": "cube",
+          "image-name": "cube.png"
         }
       ],
       "shadow": {
